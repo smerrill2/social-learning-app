@@ -1,0 +1,13 @@
+{
+  "name": "social-learning-app",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "./start-dev.sh",
+    "start:backend": "cd backend && npm run start:dev",
+    "start:mobile": "cd mobile && npx expo start --ios",
+    "start:mobile-iphone16": "cd mobile && EXPO_IOS_SIMULATOR_DEVICE_NAME=\"iPhone 16\" npx expo start --ios"
+  },
+  "dependencies": {
+    "axios": "^1.11.0"
+  }
+}
