@@ -10,10 +10,10 @@ import {
   Image,
   TouchableOpacity,
   Linking,
-  Animated,
 } from 'react-native';
 import { hackerNewsService } from '../services/api';
 import { AlgorithmPreferences, HackerNewsStory } from '../types';
+import { AnimatedFeedItem, FeedAnimationController } from './AnimatedFeedItem';
 
 interface Props {
   onOpenAlgorithmSettings?: () => void;
@@ -25,34 +25,14 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [preferences, setPreferences] = useState<AlgorithmPreferences | null>(null);
-  const animatedValues = useRef<Map<string, Animated.Value>>(new Map());
+  const [animationKey, setAnimationKey] = useState(0); // Force re-render for animations
+  const animationController = useRef(FeedAnimationController.getInstance());
 
   useEffect(() => {
     loadFeed();
   }, []);
 
-  const getAnimatedValue = (itemId: string) => {
-    if (!animatedValues.current.has(itemId)) {
-      animatedValues.current.set(itemId, new Animated.Value(0));
-    }
-    return animatedValues.current.get(itemId)!;
-  };
-
-  const animateItemsSequentially = (items: HackerNewsStory[]) => {
-    animatedValues.current.clear();
-    
-    const animations = items.map((item, index) => {
-      const animValue = getAnimatedValue(item.id.toString());
-      return Animated.timing(animValue, {
-        toValue: 1,
-        duration: 300,
-        delay: index * 35,
-        useNativeDriver: true,
-      });
-    });
-
-    Animated.stagger(20, animations).start();
-  };
+  // Animation is now handled by AnimatedFeedItem components
 
   const loadFeed = async () => {
     console.log('📱 Feed: Starting to load HackerNews feed data');
@@ -65,9 +45,8 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
       const stories = feedData.stories || [];
       setFeedItems(stories);
       
-      if (stories.length > 0) {
-        setTimeout(() => animateItemsSequentially(stories), 100);
-      }
+      // Trigger new animation cycle
+      setAnimationKey(prev => prev + 1);
     } catch (error) {
       console.error('❌ Feed: Error loading HackerNews feed:', error);
       Alert.alert('Error', 'Failed to load HackerNews stories.');
@@ -87,15 +66,8 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
       await hackerNewsService.syncStories();
       console.log('📱 Feed: Sync complete, loading fresh stories...');
       
-      // Then load the updated feed
+      // Then load the updated feed (animations will trigger automatically)
       await loadFeed();
-      
-      // Animate the refreshed items
-      setTimeout(() => {
-        if (feedItems.length > 0) {
-          animateItemsSequentially(feedItems);
-        }
-      }, 150);
     } catch (error) {
       console.error('❌ Feed: Error during refresh:', error);
       // Still try to load feed even if sync fails
@@ -158,36 +130,15 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
 
   // Research paper rendering removed - showing only HackerNews stories
 
-  const renderFeedItem = ({ item }: { item: HackerNewsStory }) => {
-    const animatedValue = getAnimatedValue(item.id.toString());
-    
-    const translateY = animatedValue.interpolate({
-      inputRange: [0, 1],
-      outputRange: [40, 0],
-    });
-    
-    const opacity = animatedValue.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, 1],
-    });
-    
-    const scale = animatedValue.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0.95, 1],
-    });
-    
+  const renderFeedItem = ({ item, index }: { item: HackerNewsStory; index: number }) => {
     return (
-      <Animated.View 
-        style={[
-          styles.feedItemContainer,
-          {
-            transform: [{ translateY }, { scale }],
-            opacity,
-          }
-        ]}
+      <AnimatedFeedItem
+        key={`${item.id}-${animationKey}`} // Force re-animation on refresh
+        index={index}
+        style={styles.feedItemContainer}
       >
         {renderHackerNewsStory(item)}
-      </Animated.View>
+      </AnimatedFeedItem>
     );
   };
 
