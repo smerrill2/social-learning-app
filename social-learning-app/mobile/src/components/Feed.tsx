@@ -10,7 +10,13 @@ import {
   Image,
   TouchableOpacity,
   Linking,
+  TextInput,
+  Animated,
+  ScrollView,
+  Dimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { hackerNewsService } from '../services/api';
 import { AlgorithmPreferences, HackerNewsStory } from '../types';
 
@@ -24,6 +30,14 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [preferences, setPreferences] = useState<AlgorithmPreferences | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isScrolled, setIsScrolled] = useState(false);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const headerProgress = scrollY.interpolate({
+    inputRange: [200, 240],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
 
   useEffect(() => {
     loadFeed();
@@ -90,6 +104,17 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
     }
   };
 
+  const handleSearch = () => {
+    // Handle search functionality here if needed
+  };
+
+  const handleScroll = (event: any) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    scrollY.setValue(offsetY);
+    setIsScrolled(offsetY > 250);
+    onScroll?.();
+  };
+
   // Insights rendering removed - showing only HackerNews stories
 
   const renderHackerNewsStory = (item: HackerNewsStory) => (
@@ -142,26 +167,204 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
   }
 
   return (
-    <View style={styles.container}>
-      {/* Algorithm controls disabled for now - showing raw HackerNews */}
-      {/* <FeedQuickControls 
-        onPreferencesChanged={handlePreferencesChanged}
-        onOpenSettings={handleOpenSettings}
-      /> */}
-      
-      <FlatList
-        data={feedItems}
-        renderItem={renderFeedItem}
-        keyExtractor={(item) => item.id.toString()}
+    <LinearGradient
+      colors={[
+        'rgba(139, 174, 211, 0.015)', // Extremely light center
+        'rgba(185, 208, 235, 0.01)', 
+        'rgba(240, 245, 250, 0.005)', 
+        'rgba(255, 255, 255, 1)',
+        'rgba(255, 255, 255, 1)',
+      ]}
+      locations={[0, 0.2, 0.4, 0.7, 1]}
+      start={{ x: 0.5, y: 0.5 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
+      {/* Fixed Header Container */}
+      <Animated.View
+        style={[
+          styles.fixedHeader,
+          {
+            opacity: headerProgress,
+            transform: [{
+              translateY: headerProgress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [-8, 0],
+                extrapolate: 'clamp',
+              })
+            }],
+          }
+        ]}
+        pointerEvents={isScrolled ? 'auto' : 'none'}
+      >
+        {/* Hamburger Menu */}
+        <TouchableOpacity style={styles.fixedHamburgerButton}>
+          <Ionicons name="menu-outline" size={30} color="#6b7280" />
+        </TouchableOpacity>
+        
+        {/* Search Bar */}
+        <View style={styles.fixedSearchBar}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Ask Anything."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#6b7280"
+            onSubmitEditing={handleSearch}
+          />
+          <TouchableOpacity onPress={handleSearch} style={styles.searchButton}>
+            <Image 
+              source={require('../../assets/Betterment.png')} 
+              style={styles.searchIcon}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+
+      {/* Floating Hamburger Menu (for initial state) */}
+      <Animated.View 
+        style={[
+          styles.floatingHamburger,
+          {
+            opacity: scrollY.interpolate({
+              inputRange: [0, 100],
+              outputRange: [0.8, 1],
+              extrapolate: 'clamp',
+            }),
+          }
+        ]}
+      >
+        <TouchableOpacity style={styles.hamburgerButton}>
+          <Ionicons name="menu-outline" size={30} color="#6b7280" />
+        </TouchableOpacity>
+      </Animated.View>
+
+      <Animated.ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { 
+            useNativeDriver: true,
+            listener: handleScroll
+          }
+        )}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-        contentContainerStyle={styles.feedContainer}
-        showsVerticalScrollIndicator={false}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        ListEmptyComponent={
-          !loading ? (
+      >
+        {/* Search Header Section - Takes up full screen height initially */}
+        <View style={styles.searchHeaderSection}>
+          <Animated.Text 
+            style={[
+              styles.searchTitle,
+              {
+                opacity: scrollY.interpolate({
+                  inputRange: [0, 150],
+                  outputRange: [1, 0],
+                  extrapolate: 'clamp',
+                }),
+                transform: [{
+                  translateY: scrollY.interpolate({
+                    inputRange: [0, 150],
+                    outputRange: [0, -50],
+                    extrapolate: 'clamp',
+                  })
+                }],
+              }
+            ]}
+          >
+            Type to Create
+          </Animated.Text>
+          <Animated.Text 
+            style={[
+              styles.searchSubtitle,
+              {
+                opacity: scrollY.interpolate({
+                  inputRange: [0, 150],
+                  outputRange: [1, 0],
+                  extrapolate: 'clamp',
+                }),
+                transform: [{
+                  translateY: scrollY.interpolate({
+                    inputRange: [0, 150],
+                    outputRange: [0, -50],
+                    extrapolate: 'clamp',
+                  })
+                }],
+              }
+            ]}
+          >
+            Scroll to Generate
+          </Animated.Text>
+          <Animated.View 
+            style={[
+              styles.searchBar,
+              {
+                transform: [{
+                  translateY: scrollY.interpolate({
+                    inputRange: [0, 300],
+                    outputRange: [0, -350],
+                    extrapolate: 'clamp',
+                  })
+                }, {
+                  translateX: scrollY.interpolate({
+                    inputRange: [200, 300],
+                    outputRange: [0, 64],
+                    extrapolate: 'clamp',
+                  })
+                }],
+              }
+            ]}
+          >
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Ask Anything."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#6b7280"
+              onSubmitEditing={handleSearch}
+            />
+            <TouchableOpacity onPress={handleSearch} style={styles.searchButton}>
+              <Image 
+                source={require('../../assets/Betterment.png')} 
+                style={styles.searchIcon}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+          </Animated.View>
+          
+          {/* Scroll indicator */}
+          <Animated.View 
+            style={[
+              styles.scrollIndicator,
+              {
+                opacity: scrollY.interpolate({
+                  inputRange: [0, 100],
+                  outputRange: [1, 0],
+                  extrapolate: 'clamp',
+                }),
+              }
+            ]}
+          >
+            <View style={styles.scrollCircle}>
+              <Ionicons name="arrow-down" size={16} color="#9ca3af" />
+            </View>
+          </Animated.View>
+        </View>
+
+        {/* Feed Content Section */}
+        <View style={styles.feedSection}>
+          {feedItems.map((item, index) => (
+            <View key={item.id.toString()} style={styles.feedItemContainer}>
+              {renderHackerNewsStory(item)}
+            </View>
+          ))}
+          
+          {!loading && feedItems.length === 0 && (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateIcon}>📰</Text>
               <Text style={styles.emptyStateTitle}>No HackerNews stories available</Text>
@@ -169,17 +372,46 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
                 Pull down to refresh and load the latest stories from HackerNews.
               </Text>
             </View>
-          ) : null
-        }
-      />
-    </View>
+          )}
+        </View>
+      </Animated.ScrollView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  searchHeaderSection: {
+    height: Dimensions.get('window').height,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    marginTop: -100,
+  },
+  feedSection: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+  },
+  floatingHamburger: {
+    position: 'absolute',
+    top: 8,
+    left: 20,
+    zIndex: 200,
+  },
+  hamburgerButton: {
+    width: 30,
+    height: 44,
+    borderRadius: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingContainer: {
     flex: 1,
@@ -509,5 +741,115 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  searchContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginTop: -100,
+  },
+  searchTitle: {
+    fontSize: 22,
+    fontFamily: 'Devoid',
+    fontWeight: 'bold',
+    color: '#9ca3af',
+    marginBottom: 5,
+    textAlign: 'center',
+  },
+  searchSubtitle: {
+    fontSize: 22,
+    fontFamily: 'Devoid',
+    fontWeight: 'bold',
+    color: '#9ca3af',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 25,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    shadowColor: 'rgb(4, 219, 235)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 100,
+    elevation: 12,
+    width: '100%',
+    maxWidth: 350,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1a1a1a',
+    marginRight: 15,
+  },
+  searchButton: {
+    width: 40,
+    height: 33,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+  },
+  searchIcon: {
+    width: 24,
+    height: 24,
+  },
+  scrollIndicator: {
+    position: 'absolute',
+    bottom: 40,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  scrollCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#9ca3af',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fixedHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 50,
+    zIndex: 199,
+    backgroundColor: 'white',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  fixedHamburgerButton: {
+    width: 30,
+    height: 44,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  fixedSearchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 25,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
 });

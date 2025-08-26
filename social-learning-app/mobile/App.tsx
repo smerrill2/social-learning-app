@@ -209,31 +209,6 @@ function AppContent() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <StatusBar barStyle="dark-content" backgroundColor="white" />
         
-        {/* Navigation Header */}
-        <Animated.View 
-          style={[
-            styles.header,
-            {
-              opacity: headerOpacity,
-              transform: [{ translateY: headerTranslateY }],
-            }
-          ]}
-        >
-          {/* Profile Icon */}
-          <TouchableOpacity style={styles.profileIcon}>
-            <Ionicons name="person-circle-outline" size={25} color="#6b7280" />
-          </TouchableOpacity>
-          
-          {/* Center Logo */}
-          <View style={styles.centerLogo}>
-            <Image 
-              source={require('./assets/Betterment.png')} 
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </View>
-        </Animated.View>
-
         {/* Main Content */}
         <View style={styles.mainContent}>
           {activeTab === 'home' ? (
@@ -295,33 +270,6 @@ const styles = StyleSheet.create({
   authContainer: {
     flex: 1,
     backgroundColor: '#f8f9fa',
-  },
-  header: {
-    backgroundColor: 'white',
-    paddingHorizontal: 16,
-    paddingVertical: 8, // Reduced from 12 to 8 to move header up
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    // Removed shadow properties for seamless look
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  profileIcon: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  centerLogo: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 40, // Balance the profile icon on the left
-  },
-  logo: {
-    width: 44,
-    height: 44,
   },
   mainContent: {
     flex: 1,

@@ -12,7 +12,7 @@ import {
 
 // Use your Mac's local IP address instead of localhost
 // When running on iPhone/simulator, localhost refers to the device itself
-const API_BASE_URL = 'http://172.20.10.2:3000';
+const API_BASE_URL = 'http://192.168.8.34:3000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
