@@ -1,6 +1,7 @@
 import { Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 @Entity('hackernews_stories')
+@Index('idx_hackernews_time_score', ['time', 'score'])
 export class HackerNewsStory {
   @PrimaryColumn()
   id: number;

@@ -29,20 +29,30 @@ export class HackerNewsService {
   ) {}
 
   async getTopStories(limit: number = 50, offset: number = 0) {
-    const cacheKey = `hn:stories:${limit}:${offset}`;
+    const cacheKey = `hn:fresh:stories:${limit}:${offset}`;
     const cached = await this.cacheService.get<any>(cacheKey);
     
     if (cached) {
+      this.logger.debug(`Cache hit for ${cacheKey}`);
       return cached;
     }
 
+    this.logger.debug(`Cache miss for ${cacheKey}, querying database`);
+    const startTime = Date.now();
+
     const stories = await this.storyRepository
       .createQueryBuilder('story')
+      .where('story.time >= :timeThreshold', {
+        timeThreshold: new Date(Date.now() - 48 * 60 * 60 * 1000) // 48 hours ago
+      })
       .orderBy('story.score', 'DESC')
       .addOrderBy('story.time', 'DESC')
       .limit(limit)
       .offset(offset)
       .getMany();
+
+    const queryTime = Date.now() - startTime;
+    this.logger.debug(`Fresh stories query completed in ${queryTime}ms, found ${stories.length} stories`);
 
     const result = {
       stories: stories.map(story => ({
@@ -140,9 +150,15 @@ export class HackerNewsService {
   }
 
   private async clearStoryCaches(): Promise<void> {
-    // Clear main story caches
-    const keys = ['hn:stories:50:0', 'hn:stories:20:0', 'hn:stories:100:0'];
+    // Clear fresh story caches
+    const keys = [
+      'hn:fresh:stories:50:0', 
+      'hn:fresh:stories:20:0', 
+      'hn:fresh:stories:100:0',
+      'hn:fresh:stories:25:0'
+    ];
     await Promise.all(keys.map(key => this.cacheService.del(key)));
+    this.logger.debug('Cleared fresh stories cache');
   }
 
   private getTimeAgo(date: Date): string {
