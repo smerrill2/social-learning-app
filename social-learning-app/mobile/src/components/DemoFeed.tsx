@@ -249,7 +249,13 @@ export const DemoFeed: React.FC<Props> = ({ onScroll }) => {
 
   if (!showContent) {
     return (
-      <View style={styles.container}>
+      <ScrollView 
+        style={styles.container}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.searchScrollContainer}
+      >
         <View style={styles.searchContainer}>
           <View style={styles.searchHeader}>
             <Text style={styles.searchTitle}>Explore Great Thinkers</Text>
@@ -290,10 +296,15 @@ export const DemoFeed: React.FC<Props> = ({ onScroll }) => {
 
           <View style={styles.scrollHint}>
             <Ionicons name="arrow-down" size={24} color="#3b82f6" />
-            <Text style={styles.scrollHintText}>Or scroll down to explore</Text>
+            <Text style={styles.scrollHintText}>Scroll down to explore content</Text>
           </View>
         </View>
-      </View>
+        
+        {/* Add some scrollable space to trigger the scroll */}
+        <View style={styles.scrollTrigger}>
+          <Text style={styles.scrollTriggerText}>Keep scrolling to see great thinkers...</Text>
+        </View>
+      </ScrollView>
     );
   }
 
@@ -329,10 +340,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  searchScrollContainer: {
+    flexGrow: 1,
+    minHeight: '120%', // Make it taller than screen to enable scrolling
+  },
   searchContainer: {
     flex: 1,
     padding: 20,
     justifyContent: 'center',
+    minHeight: '90%', // Take up most of the screen
+  },
+  scrollTrigger: {
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    margin: 20,
+    borderRadius: 12,
+  },
+  scrollTriggerText: {
+    fontSize: 16,
+    color: '#6b7280',
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
   searchHeader: {
     alignItems: 'center',
