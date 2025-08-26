@@ -181,10 +181,27 @@ npm start
 ## 🔧 Configuration
 
 ### Mobile App API Configuration
-Update the IP address in `mobile/src/services/api.ts` to match your development machine:
+
+**Important**: The mobile app needs to connect to your Mac's IP address, not localhost.
+
+#### Automatic IP Update (Recommended)
+```bash
+./update-ip.sh
+```
+This script automatically detects your current IP and updates the mobile app configuration.
+
+#### Manual IP Update
+If needed, update the IP address in `mobile/src/services/api.ts`:
 ```typescript
 const API_BASE_URL = 'http://YOUR_IP_ADDRESS:3000';
 ```
+
+To find your current IP address:
+```bash
+ifconfig | grep "inet " | grep -v 127.0.0.1 | head -1
+```
+
+**Note**: Your IP address may change when switching WiFi networks. If the mobile app shows "Loading..." indefinitely, run the update script or manually update the IP address.
 
 ### Database Setup
 The app uses PostgreSQL with the following entities:
