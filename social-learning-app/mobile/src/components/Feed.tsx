@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { hackerNewsService } from '../services/api';
 import { AlgorithmPreferences, HackerNewsStory } from '../types';
-import { AnimatedFeedItem, FeedAnimationController } from './AnimatedFeedItem';
 
 interface Props {
   onOpenAlgorithmSettings?: () => void;
@@ -25,14 +24,11 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [preferences, setPreferences] = useState<AlgorithmPreferences | null>(null);
-  const [animationKey, setAnimationKey] = useState(0); // Force re-render for animations
-  const animationController = useRef(FeedAnimationController.getInstance());
 
   useEffect(() => {
     loadFeed();
   }, []);
 
-  // Animation is now handled by AnimatedFeedItem components
 
   const loadFeed = async () => {
     console.log('📱 Feed: Starting to load HackerNews feed data');
@@ -45,8 +41,6 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
       const stories = feedData.stories || [];
       setFeedItems(stories);
       
-      // Trigger new animation cycle
-      setAnimationKey(prev => prev + 1);
     } catch (error) {
       console.error('❌ Feed: Error loading HackerNews feed:', error);
       Alert.alert('Error', 'Failed to load HackerNews stories.');
@@ -132,13 +126,9 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
 
   const renderFeedItem = ({ item, index }: { item: HackerNewsStory; index: number }) => {
     return (
-      <AnimatedFeedItem
-        key={`${item.id}-${animationKey}`} // Force re-animation on refresh
-        index={index}
-        style={styles.feedItemContainer}
-      >
+      <View style={styles.feedItemContainer}>
         {renderHackerNewsStory(item)}
-      </AnimatedFeedItem>
+      </View>
     );
   };
 

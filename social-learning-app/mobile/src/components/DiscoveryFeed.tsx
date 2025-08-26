@@ -5,15 +5,14 @@ import {
   FlatList,
   StyleSheet,
   Alert,
-  Animated,
   Dimensions,
   ViewToken,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { hackerNewsService } from '../services/api';
 import { AlgorithmPreferences, HackerNewsStory } from '../types';
-import { SkeletonFeedList } from './SkeletonLoader';
 import { ScrollDiscoveryFeedItem } from './ScrollDiscoveryFeedItem';
-import { GenerativeRefreshControl, GenerationIndicator } from './GenerativeRefreshControl';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const ITEM_HEIGHT = 150;
@@ -27,15 +26,12 @@ interface Props {
 export const DiscoveryFeed: React.FC<Props> = ({ 
   onOpenAlgorithmSettings, 
   onScroll,
-  discoveryMode = 'typewriter' 
 }) => {
   const [feedItems, setFeedItems] = useState<HackerNewsStory[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showGenerationIndicator, setShowGenerationIndicator] = useState(false);
   const [visibleItems, setVisibleItems] = useState<Set<string>>(new Set());
 
-  const scrollY = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -44,7 +40,6 @@ export const DiscoveryFeed: React.FC<Props> = ({
 
   const loadFeed = async () => {
     console.log('📱 DiscoveryFeed: Starting to load HackerNews feed data');
-    setShowGenerationIndicator(true);
     
     try {
       console.log('📡 DiscoveryFeed: Making API call for HackerNews stories');
@@ -61,13 +56,11 @@ export const DiscoveryFeed: React.FC<Props> = ({
       setFeedItems([]);
     } finally {
       setLoading(false);
-      setTimeout(() => setShowGenerationIndicator(false), 1500);
     }
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    setShowGenerationIndicator(true);
     
     try {
       console.log('📱 DiscoveryFeed: Syncing HackerNews data...');
@@ -85,7 +78,6 @@ export const DiscoveryFeed: React.FC<Props> = ({
       await loadFeed();
     } finally {
       setRefreshing(false);
-      setTimeout(() => setShowGenerationIndicator(false), 800);
     }
   };
 
@@ -104,15 +96,9 @@ export const DiscoveryFeed: React.FC<Props> = ({
     minimumViewTime: 100,
   };
 
-  const handleScroll = Animated.event(
-    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    { 
-      useNativeDriver: false,
-      listener: (event: any) => {
-        onScroll?.();
-      },
-    }
-  );
+  const handleScroll = () => {
+    onScroll?.();
+  };
 
   const getItemLayout = useCallback((data: any, index: number) => ({
     length: ITEM_HEIGHT,
@@ -125,10 +111,8 @@ export const DiscoveryFeed: React.FC<Props> = ({
       <ScrollDiscoveryFeedItem
         item={item}
         index={index}
-        scrollY={scrollY}
         itemOffset={index * ITEM_HEIGHT}
         itemHeight={ITEM_HEIGHT}
-        discoveryMode={discoveryMode}
       />
     );
   };
@@ -138,23 +122,16 @@ export const DiscoveryFeed: React.FC<Props> = ({
   if (loading) {
     return (
       <View style={styles.container}>
-        {showGenerationIndicator && (
-          <GenerationIndicator 
-            visible={true} 
-            text="🔍 Discovering personalized content..." 
-          />
-        )}
-        <SkeletonFeedList itemCount={8} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3b82f6" />
+          <Text style={styles.loadingText}>Loading stories...</Text>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <GenerationIndicator 
-        visible={showGenerationIndicator}
-        text={refreshing ? "🌟 Generating fresh discoveries..." : "🔍 AI is discovering content for you..."}
-      />
       
       <FlatList
         ref={flatListRef}
@@ -165,11 +142,7 @@ export const DiscoveryFeed: React.FC<Props> = ({
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         refreshControl={
-          <GenerativeRefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            generatingText="🔍 Discovering fresh content..."
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         contentContainerStyle={styles.feedContainer}
         showsVerticalScrollIndicator={false}
@@ -193,14 +166,6 @@ export const DiscoveryFeed: React.FC<Props> = ({
       />
 
       {/* Discovery Mode Indicator */}
-      <View style={styles.discoveryModeIndicator}>
-        <Text style={styles.discoveryModeText}>
-          {discoveryMode === 'typewriter' && '⌨️ Typewriter Mode'}
-          {discoveryMode === 'wordReveal' && '📝 Word Reveal'}
-          {discoveryMode === 'lineReveal' && '📄 Line Reveal'}
-          {discoveryMode === 'sparkle' && '✨ Sparkle Mode'}
-        </Text>
-      </View>
     </View>
   );
 };
@@ -213,6 +178,17 @@ const styles = StyleSheet.create({
   feedContainer: {
     padding: 16,
     paddingBottom: 100,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
   },
   emptyState: {
     flex: 1,
