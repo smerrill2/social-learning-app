@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Image,
   TouchableOpacity,
   Linking,
+  Animated,
 } from 'react-native';
 import { hackerNewsService } from '../services/api';
 import { AlgorithmPreferences, HackerNewsStory } from '../types';
@@ -24,10 +25,34 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [preferences, setPreferences] = useState<AlgorithmPreferences | null>(null);
+  const animatedValues = useRef<Map<string, Animated.Value>>(new Map());
 
   useEffect(() => {
     loadFeed();
   }, []);
+
+  const getAnimatedValue = (itemId: string) => {
+    if (!animatedValues.current.has(itemId)) {
+      animatedValues.current.set(itemId, new Animated.Value(0));
+    }
+    return animatedValues.current.get(itemId)!;
+  };
+
+  const animateItemsSequentially = (items: HackerNewsStory[]) => {
+    animatedValues.current.clear();
+    
+    const animations = items.map((item, index) => {
+      const animValue = getAnimatedValue(item.id.toString());
+      return Animated.timing(animValue, {
+        toValue: 1,
+        duration: 300,
+        delay: index * 35,
+        useNativeDriver: true,
+      });
+    });
+
+    Animated.stagger(20, animations).start();
+  };
 
   const loadFeed = async () => {
     console.log('📱 Feed: Starting to load HackerNews feed data');
@@ -37,7 +62,12 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
       
       console.log('📊 Feed: Received HackerNews stories:', feedData?.stories?.length || 0, 'items');
       
-      setFeedItems(feedData.stories || []);
+      const stories = feedData.stories || [];
+      setFeedItems(stories);
+      
+      if (stories.length > 0) {
+        setTimeout(() => animateItemsSequentially(stories), 100);
+      }
     } catch (error) {
       console.error('❌ Feed: Error loading HackerNews feed:', error);
       Alert.alert('Error', 'Failed to load HackerNews stories.');
@@ -59,6 +89,13 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
       
       // Then load the updated feed
       await loadFeed();
+      
+      // Animate the refreshed items
+      setTimeout(() => {
+        if (feedItems.length > 0) {
+          animateItemsSequentially(feedItems);
+        }
+      }, 150);
     } catch (error) {
       console.error('❌ Feed: Error during refresh:', error);
       // Still try to load feed even if sync fails
@@ -122,10 +159,35 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
   // Research paper rendering removed - showing only HackerNews stories
 
   const renderFeedItem = ({ item }: { item: HackerNewsStory }) => {
+    const animatedValue = getAnimatedValue(item.id.toString());
+    
+    const translateY = animatedValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: [40, 0],
+    });
+    
+    const opacity = animatedValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 1],
+    });
+    
+    const scale = animatedValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.95, 1],
+    });
+    
     return (
-      <View style={styles.feedItemContainer}>
+      <Animated.View 
+        style={[
+          styles.feedItemContainer,
+          {
+            transform: [{ translateY }, { scale }],
+            opacity,
+          }
+        ]}
+      >
         {renderHackerNewsStory(item)}
-      </View>
+      </Animated.View>
     );
   };
 
