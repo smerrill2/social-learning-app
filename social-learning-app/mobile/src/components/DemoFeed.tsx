@@ -9,7 +9,6 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { AnimatedFeedItem } from './AnimatedFeedItem';
 
 interface PhilosopherContent {
   id: string;
@@ -144,7 +143,6 @@ export const DemoFeed: React.FC<Props> = ({ onScroll }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showContent, setShowContent] = useState(false);
   const [visibleItems, setVisibleItems] = useState<PhilosopherContent[]>([]);
-  const [animationKey, setAnimationKey] = useState(0);
 
   useEffect(() => {
     if (showContent) {
@@ -156,18 +154,15 @@ export const DemoFeed: React.FC<Props> = ({ onScroll }) => {
   const loadContent = () => {
     // Start with first few items
     setVisibleItems(philosopherData.slice(0, 3));
-    setAnimationKey(prev => prev + 1);
     
     // Gradually load more content
     setTimeout(() => {
       setVisibleItems(philosopherData.slice(0, 6));
-      setAnimationKey(prev => prev + 1);
-    }, 1000);
+      }, 1000);
     
     setTimeout(() => {
       setVisibleItems(philosopherData);
-      setAnimationKey(prev => prev + 1);
-    }, 2000);
+      }, 2000);
   };
 
   const handleSearch = () => {
@@ -204,9 +199,8 @@ export const DemoFeed: React.FC<Props> = ({ onScroll }) => {
   };
 
   const renderPhilosopherItem = (item: PhilosopherContent, index: number) => (
-    <AnimatedFeedItem
-      key={`${item.id}-${animationKey}`}
-      index={index}
+    <View 
+      key={item.id}
       style={styles.itemContainer}
     >
       <View style={styles.philosopherCard}>
@@ -244,7 +238,7 @@ export const DemoFeed: React.FC<Props> = ({ onScroll }) => {
           ))}
         </View>
       </View>
-    </AnimatedFeedItem>
+    </View>
   );
 
   if (!showContent) {
