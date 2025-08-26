@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LoginForm } from './src/components/LoginForm';
 import { RegisterForm } from './src/components/RegisterForm';
 import { Feed } from './src/components/Feed';
+import { DemoFeed } from './src/components/DemoFeed';
 import { BottomNavigation } from './src/components/BottomNavigation';
 import { AuthProvider, useAuth } from './src/hooks/useAuth';
 import { AlgorithmSettings } from './src/screens/AlgorithmSettings';
@@ -89,11 +90,6 @@ function AppContent() {
 
   const handleTabPress = (tabId: string) => {
     setActiveTab(tabId);
-    // For now, all tabs show the feed. Later you can add different screens.
-    if (tabId === 'home') {
-      // Already on feed
-    }
-    // TODO: Add other screens for search, insights, profile
   };
 
   // Header animation functions
@@ -240,10 +236,19 @@ function AppContent() {
 
         {/* Main Content */}
         <View style={styles.mainContent}>
-          <Feed 
-            onOpenAlgorithmSettings={handleOpenAlgorithmSettings} 
-            onScroll={undefined}
-          />
+          {activeTab === 'home' ? (
+            <Feed 
+              onOpenAlgorithmSettings={handleOpenAlgorithmSettings} 
+              onScroll={undefined}
+            />
+          ) : activeTab === 'books' ? (
+            <DemoFeed onScroll={undefined} />
+          ) : (
+            <View style={styles.comingSoon}>
+              <Text style={styles.comingSoonText}>Coming Soon</Text>
+              <Text style={styles.comingSoonSubtext}>This feature is in development</Text>
+            </View>
+          )}
         </View>
         
 
@@ -320,6 +325,25 @@ const styles = StyleSheet.create({
   },
   mainContent: {
     flex: 1,
+  },
+  comingSoon: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    padding: 40,
+  },
+  comingSoonText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  comingSoonSubtext: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
   },
 });
 
