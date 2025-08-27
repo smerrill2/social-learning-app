@@ -10,9 +10,33 @@ import {
   AlgorithmFeedResponse
 } from '../types';
 
-// Use your Mac's local IP address instead of localhost
-// When running on iPhone/simulator, localhost refers to the device itself
-const API_BASE_URL = 'http://192.168.8.34:3000';
+// Dynamic API base URL configuration
+// This will automatically detect and use the correct IP address
+const getApiBaseUrl = () => {
+  // In development, try to auto-detect the host IP
+  if (__DEV__) {
+    // For Expo development, we can use the development server's host
+    const expoHost = process.env.EXPO_PUBLIC_API_HOST;
+    if (expoHost) {
+      return `http://${expoHost}:3000`;
+    }
+    
+    // Fallback to localhost for simulators (iOS simulator can access localhost)
+    // For physical devices, you'll need to set EXPO_PUBLIC_API_HOST
+    return 'http://localhost:3000';
+  }
+  
+  // Production URL (you can set this via environment variables)
+  return process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
+// Debug logging
+console.log('🌐 API Configuration:');
+console.log('  - Base URL:', API_BASE_URL);
+console.log('  - Environment:', __DEV__ ? 'Development' : 'Production');
+console.log('  - EXPO_PUBLIC_API_HOST:', process.env.EXPO_PUBLIC_API_HOST);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -105,6 +129,22 @@ export const hackerNewsService = {
 
   async syncStories() {
     const response = await api.get('/hackernews/sync');
+    return response.data;
+  },
+};
+
+export const sessionService = {
+  async getPack(topic?: string): Promise<any> {
+    const response = await api.get('/session/pack', {
+      params: topic ? { topic } : {},
+    });
+    return response.data;
+  },
+};
+
+export const contentService = {
+  async sendFeedback(itemId: string | number, source: 'hackernews' | 'research' | 'insight', action: 'save' | 'more' | 'less' | 'skip'): Promise<{ ok: boolean }> {
+    const response = await api.post('/content/feedback', { itemId, source, action });
     return response.data;
   },
 };

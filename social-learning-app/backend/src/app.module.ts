@@ -13,12 +13,13 @@ import { InteractionsModule } from './interactions/interactions.module';
 import { HackerNewsModule } from './hackernews/hackernews.module';
 import { ArxivModule } from './arxiv/arxiv.module';
 import { AlgorithmModule } from './algorithm/algorithm.module';
+import { SessionModule } from './session/session.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: '.env, .env.example',
     }),
     ThrottlerModule.forRoot([
       {
@@ -36,6 +37,7 @@ import { AlgorithmModule } from './algorithm/algorithm.module';
     HackerNewsModule,
     ArxivModule,
     AlgorithmModule,
+    SessionModule,
   ],
   controllers: [AppController],
   providers: [AppService],

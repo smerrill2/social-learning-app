@@ -138,6 +138,12 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
       {item.domain && (
         <Text style={styles.storyDomain}>{item.domain}</Text>
       )}
+
+      {!!item.summary && (
+        <Text style={styles.storySummary} numberOfLines={8}>
+          {item.summary}
+        </Text>
+      )}
       
       <View style={styles.storyFooter}>
         <Text style={styles.storyStats}>
@@ -601,6 +607,12 @@ const styles = StyleSheet.create({
   storyStats: {
     fontSize: 12,
     color: '#6b7280',
+  },
+  storySummary: {
+    fontSize: 13,
+    color: '#374151',
+    lineHeight: 19,
+    marginBottom: 10,
   },
   researchCard: {
     backgroundColor: 'white',

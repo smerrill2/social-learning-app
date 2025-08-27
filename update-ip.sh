@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Script to automatically update the mobile app's API base URL with current IP address
+# Enhanced script to set up development environment with automatic IP detection
 
-echo "🔍 Detecting current IP address..."
+echo "🔍 Setting up development environment..."
 
 # Get current IP address (excluding localhost)
 CURRENT_IP=$(ifconfig | grep "inet " | grep -v 127.0.0.1 | head -1 | awk '{print $2}')
@@ -14,32 +14,45 @@ fi
 
 echo "📍 Current IP address: $CURRENT_IP"
 
-# Update the API base URL in the mobile app
-API_FILE="social-learning-app/mobile/src/services/api.ts"
+# Create or update the .env file for mobile app
+ENV_FILE="social-learning-app/mobile/.env"
 
-if [ ! -f "$API_FILE" ]; then
-    echo "❌ API file not found: $API_FILE"
-    exit 1
-fi
+echo "📝 Creating/updating mobile app environment file..."
 
-# Backup the original file
-cp "$API_FILE" "$API_FILE.backup"
+cat > "$ENV_FILE" << EOF
+# Auto-generated environment configuration
+# Generated on $(date)
 
-# Update the IP address
-sed -i "" "s|http://[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:3000|http://$CURRENT_IP:3000|g" "$API_FILE"
+# API Configuration - your Mac's IP address
+EXPO_PUBLIC_API_HOST=$CURRENT_IP
 
-echo "✅ Updated API base URL to: http://$CURRENT_IP:3000"
+# Development Settings
+NODE_ENV=development
+EOF
 
-# Test the connection
-echo "🧪 Testing API connection..."
+echo "✅ Created $ENV_FILE with IP: $CURRENT_IP"
+
+# Test the backend connection
+echo "🧪 Testing backend connection..."
 if curl -s --connect-timeout 5 --max-time 10 "http://$CURRENT_IP:3000/hackernews/stories?limit=1" > /dev/null; then
-    echo "✅ API connection successful!"
-    rm "$API_FILE.backup"
+    echo "✅ Backend connection successful!"
+elif curl -s --connect-timeout 5 --max-time 10 "http://localhost:3000/hackernews/stories?limit=1" > /dev/null; then
+    echo "⚠️  Backend is running on localhost only"
+    echo "💡 Make sure your backend is configured to listen on 0.0.0.0:3000"
+    echo "   Check your backend's main.ts file"
 else
-    echo "❌ API connection failed. Restoring backup..."
-    mv "$API_FILE.backup" "$API_FILE"
-    exit 1
+    echo "❌ Backend connection failed"
+    echo "💡 Make sure your backend is running with: npm run start:dev"
+    echo "   Backend should be accessible at: http://$CURRENT_IP:3000"
 fi
 
-echo "🎉 IP address updated successfully!"
-echo "💡 You may need to restart your mobile app to see the changes."
+echo ""
+echo "🎉 Development environment configured!"
+echo ""
+echo "📱 Mobile app will now connect to: http://$CURRENT_IP:3000"
+echo "💡 Next steps:"
+echo "   1. Restart your mobile app if it's already running"
+echo "   2. Make sure your backend is running: cd social-learning-app/backend && npm run start:dev"
+echo "   3. Your mobile app should now work on any WiFi network!"
+echo ""
+echo "🔄 Run this script again whenever you change WiFi networks"

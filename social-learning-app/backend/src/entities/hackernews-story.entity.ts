@@ -37,6 +37,12 @@ export class HackerNewsStory {
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   fetchedAt: Date;
 
+  @Column({ type: 'text', nullable: true })
+  summary: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  summaryUpdatedAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

@@ -5,6 +5,7 @@ import { HackerNewsService } from './hackernews.service';
 import { HackerNewsController } from './hackernews.controller';
 import { HackerNewsStory } from '../entities/hackernews-story.entity';
 import { CacheService } from '../cache/cache.service';
+import { ConfigService } from '@nestjs/config';
 
 describe('HackerNews Feed Mechanics Integration', () => {
   let module: TestingModule;
@@ -44,6 +45,10 @@ describe('HackerNews Feed Mechanics Integration', () => {
         {
           provide: CacheService,
           useValue: mockCacheService,
+        },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn(() => 'test-key') },
         },
       ],
     }).compile();

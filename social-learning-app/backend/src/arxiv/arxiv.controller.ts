@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { DevBypassAuthGuard } from '../auth/dev-bypass.guard';
 import { ArxivService } from './arxiv.service';
 
 @Controller('arxiv')
@@ -14,7 +15,7 @@ export class ArxivController {
   constructor(private arxivService: ArxivService) {}
 
   @Get('papers')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(DevBypassAuthGuard)
   async searchPapers(
     @Request() req,
     @Query('categories') categories?: string,
@@ -27,7 +28,7 @@ export class ArxivController {
   }
 
   @Get('sync')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(DevBypassAuthGuard)
   async syncPapers() {
     await this.arxivService.syncBehavioralSciencePapers();
     return { message: 'Papers sync started' };

@@ -30,10 +30,10 @@ export const BottomNavigation: React.FC<Props> = ({
       onPress: () => onTabPress('home'),
     },
     {
-      id: 'books',
-      iconType: 'AntDesign',
-      icon: 'book',
-      onPress: () => onTabPress('books'),
+      id: 'saved',
+      iconType: 'Ionicons',
+      icon: 'bookmark-outline',
+      onPress: () => onTabPress('saved'),
     },
     {
       id: 'analytics',

@@ -15,6 +15,7 @@ import { LoginForm } from './src/components/LoginForm';
 import { RegisterForm } from './src/components/RegisterForm';
 import { Feed } from './src/components/Feed';
 import { DemoFeed } from './src/components/DemoFeed';
+import DailyPack from './src/screens/DailyPack';
 import { BottomNavigation } from './src/components/BottomNavigation';
 import { AuthProvider, useAuth } from './src/hooks/useAuth';
 import { AlgorithmSettings } from './src/screens/AlgorithmSettings';
@@ -216,8 +217,8 @@ function AppContent() {
               onOpenAlgorithmSettings={handleOpenAlgorithmSettings} 
               onScroll={undefined}
             />
-          ) : activeTab === 'books' ? (
-            <DemoFeed onScroll={undefined} />
+          ) : activeTab === 'saved' ? (
+            <DailyPack />
           ) : (
             <View style={styles.comingSoon}>
               <Text style={styles.comingSoonText}>Coming Soon</Text>

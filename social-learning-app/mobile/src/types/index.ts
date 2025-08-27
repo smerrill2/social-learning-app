@@ -74,6 +74,7 @@ export interface HackerNewsStory {
   type: string;
   timeAgo: string;
   domain?: string;
+  summary?: string | null;
 }
 
 export interface HackerNewsResponse {

@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { HackerNewsService } from './hackernews.service';
 import { HackerNewsStory } from '../entities/hackernews-story.entity';
 import { CacheService } from '../cache/cache.service';
+import { ConfigService } from '@nestjs/config';
 
 describe('HackerNews MVP Benefits Validation', () => {
   let module: TestingModule;
@@ -39,6 +40,10 @@ describe('HackerNews MVP Benefits Validation', () => {
         {
           provide: CacheService,
           useValue: mockCacheService,
+        },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn(() => 'test-key') },
         },
       ],
     }).compile();

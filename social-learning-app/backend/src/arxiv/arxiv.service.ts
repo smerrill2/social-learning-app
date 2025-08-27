@@ -66,6 +66,34 @@ export class ArxivService {
     return result;
   }
 
+  // Helper for Session packs: get recent papers by topic keywords/categories (≤14 days)
+  async getRecentByTopic(topic: string, limit: number = 20) {
+    const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+    const keywords = this.topicKeywords(topic);
+
+    const qb = this.paperRepository
+      .createQueryBuilder('paper')
+      .where('paper.publishedDate >= :cutoff', { cutoff })
+      .orderBy('paper.publishedDate', 'DESC')
+      .limit(limit);
+
+    if (keywords.length > 0) {
+      qb.andWhere('(LOWER(paper.title) LIKE ANY(:kw) OR LOWER(paper.abstract) LIKE ANY(:kw))', {
+        kw: keywords.map(k => `%${k}%`),
+      });
+    }
+
+    return qb.getMany();
+  }
+
+  private topicKeywords(topic: string): string[] {
+    const t = (topic || '').toLowerCase();
+    if (t.includes('ai')) return ['llm', 'transformer', 'inference', 'agent', 'distillation', 'alignment', 'machine learning'];
+    if (t.includes('cognitive') || t.includes('behavior')) return ['attention', 'memory', 'cognitive', 'neuroscience', 'decision', 'behavior'];
+    if (t.includes('productivity') || t.includes('habit')) return ['habit', 'attention', 'focus', 'self-control', 'time management'];
+    return [];
+  }
+
   async syncBehavioralSciencePapers(): Promise<void> {
     try {
       this.logger.log('Starting sync of behavioral science papers from arXiv...');
@@ -121,7 +149,12 @@ export class ArxivService {
 
       this.logger.log(`Fetching papers for query: ${searchQuery}`);
       
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': `SocialLearningApp/1.0 (mailto:spencer19merrill@gmail.com)`,
+          'Accept': 'application/atom+xml,application/xml;q=0.9,*/*;q=0.8'
+        }
+      });
       const xmlData = await response.text();
       
       const parser = new xml2js.Parser();
@@ -281,7 +314,7 @@ export class ArxivService {
       'neuroscience': ['brain', 'neural', 'neuroscience'],
       'health': ['health', 'medical', 'clinical'],
       'behavioral': ['behavior', 'decision-making', 'social'],
-    };
+    } as Record<string, string[]>;
 
     Object.entries(tagMappings).forEach(([key, keywords]) => {
       if (keywords.some(kw => text.includes(kw))) {
@@ -292,3 +325,4 @@ export class ArxivService {
     return [...new Set(tags)]; // Remove duplicates
   }
 }
+
