@@ -7,6 +7,11 @@ import { Insight } from '../entities/insight.entity';
 import { Interaction } from '../entities/interaction.entity';
 import { HackerNewsStory } from '../entities/hackernews-story.entity';
 import { ResearchPaper } from '../entities/research-paper.entity';
+import { UserLearningProfile } from '../entities/user-learning-profile.entity';
+import { Achievement, UserAchievement } from '../entities/achievement.entity';
+import { ContentDifficultyAssessment } from '../entities/content-difficulty.entity';
+import { LearningPath, UserLearningPathEnrollment } from '../entities/learning-path.entity';
+import { SkillChallenge, ChallengeAttempt } from '../entities/skill-challenge.entity';
 
 @Module({
   imports: [
@@ -20,13 +25,43 @@ import { ResearchPaper } from '../entities/research-paper.entity';
         username: configService.get('DB_USERNAME', 'postgres'),
         password: configService.get('DB_PASSWORD', 'password'),
         database: configService.get('DB_NAME', 'social_learning'),
-        entities: [User, Book, Insight, Interaction, HackerNewsStory, ResearchPaper],
+        entities: [
+          User, 
+          Book, 
+          Insight, 
+          Interaction, 
+          HackerNewsStory, 
+          ResearchPaper,
+          UserLearningProfile,
+          Achievement,
+          UserAchievement,
+          ContentDifficultyAssessment,
+          LearningPath,
+          UserLearningPathEnrollment,
+          SkillChallenge,
+          ChallengeAttempt,
+        ],
         synchronize: configService.get('NODE_ENV') !== 'production',
         logging: configService.get('NODE_ENV') === 'development',
         ssl: configService.get('NODE_ENV') === 'production' ? { rejectUnauthorized: false } : false,
       }),
     }),
-    TypeOrmModule.forFeature([User, Book, Insight, Interaction, HackerNewsStory, ResearchPaper]),
+    TypeOrmModule.forFeature([
+      User, 
+      Book, 
+      Insight, 
+      Interaction, 
+      HackerNewsStory, 
+      ResearchPaper,
+      UserLearningProfile,
+      Achievement,
+      UserAchievement,
+      ContentDifficultyAssessment,
+      LearningPath,
+      UserLearningPathEnrollment,
+      SkillChallenge,
+      ChallengeAttempt,
+    ]),
   ],
   exports: [TypeOrmModule],
 })

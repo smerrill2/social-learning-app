@@ -14,6 +14,7 @@ import { HackerNewsModule } from './hackernews/hackernews.module';
 import { ArxivModule } from './arxiv/arxiv.module';
 import { AlgorithmModule } from './algorithm/algorithm.module';
 import { SessionModule } from './session/session.module';
+import { LearningModule } from './learning/learning.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { SessionModule } from './session/session.module';
     ArxivModule,
     AlgorithmModule,
     SessionModule,
+    LearningModule,
   ],
   controllers: [AppController],
   providers: [AppService],
