@@ -336,4 +336,61 @@ export const algorithmService = {
   },
 };
 
+// Learning API Service
+export const learningService = {
+  async getRecommendations(userId: string): Promise<any[]> {
+    try {
+      const response = await api.get(`/learning/recommendations/${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching learning recommendations:', error);
+      return [];
+    }
+  },
+
+  async getProgress(userId: string): Promise<any> {
+    try {
+      const response = await api.get(`/learning/progress/${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching learning progress:', error);
+      return null;
+    }
+  },
+
+  async getAchievements(userId: string): Promise<any[]> {
+    try {
+      const response = await api.get(`/learning/achievements/${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching achievements:', error);
+      return [];
+    }
+  },
+
+  async trackActivity(userId: string, activity: {
+    contentId: string;
+    contentType: string;
+    timeSpent: number;
+    completed: boolean;
+    skillsApplied: string[];
+  }): Promise<void> {
+    try {
+      await api.post(`/learning/track-activity/${userId}`, activity);
+    } catch (error) {
+      console.error('Error tracking learning activity:', error);
+    }
+  },
+
+  async getLeaderboard(skillArea: string): Promise<any[]> {
+    try {
+      const response = await api.get(`/learning/leaderboard/${skillArea}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error);
+      return [];
+    }
+  }
+};
+
 export default api;

@@ -70,12 +70,8 @@ export class LearningPath {
   isFeatured: boolean;
 
   // Creation and curation
-  @ManyToOne(() => User, { nullable: true })
-  @JoinColumn({ name: 'createdBy' })
-  creator: User;
-
-  @Column('uuid', { nullable: true })
-  createdBy: string;
+  @Column({ nullable: true })
+  createdBy: string; // username, not UUID
 
   @Column({ type: 'enum', enum: ['community', 'expert', 'algorithm'], default: 'algorithm' })
   curatedBy: 'community' | 'expert' | 'algorithm';
@@ -92,18 +88,14 @@ export class UserLearningPathEnrollment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'userId' })
-  user: User;
-
-  @Column('uuid')
-  userId: string;
+  @Column()
+  userId: string; // username, not UUID
 
   @ManyToOne(() => LearningPath)
   @JoinColumn({ name: 'pathId' })
   path: LearningPath;
 
-  @Column('uuid')
+  @Column()
   pathId: string;
 
   // Progress tracking

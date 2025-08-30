@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryColumn, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { User } from './user.entity';
 
 export type AchievementCategory = 
@@ -23,7 +23,7 @@ export interface AchievementCriteria {
 
 @Entity('achievements')
 export class Achievement {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn()
   id: string;
 
   @Column({ length: 100 })
@@ -78,18 +78,14 @@ export class UserAchievement {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'userId' })
-  user: User;
-
-  @Column('uuid')
-  userId: string;
+  @Column()
+  userId: string; // username, not UUID
 
   @ManyToOne(() => Achievement)
   @JoinColumn({ name: 'achievementId' })
   achievement: Achievement;
 
-  @Column('uuid')
+  @Column()
   achievementId: string;
 
   // When and how the achievement was earned

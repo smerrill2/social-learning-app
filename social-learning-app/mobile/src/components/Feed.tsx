@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { hackerNewsService } from '../services/api';
+import { hackerNewsService, learningService } from '../services/api';
 import { AlgorithmPreferences, HackerNewsStory } from '../types';
 
 interface Props {
@@ -27,11 +27,17 @@ interface Props {
 
 export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => {
   const [feedItems, setFeedItems] = useState<HackerNewsStory[]>([]);
+  const [learningRecommendations, setLearningRecommendations] = useState<any[]>([]);
+  const [userProgress, setUserProgress] = useState<any>(null);
+  const [achievements, setAchievements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [preferences, setPreferences] = useState<AlgorithmPreferences | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isScrolled, setIsScrolled] = useState(false);
+  
+  // For demo purposes, using our seeded novice-learner user
+  const currentUserId = 'novice-learner';
   const scrollY = useRef(new Animated.Value(0)).current;
   const headerProgress = scrollY.interpolate({
     inputRange: [200, 240],
@@ -41,7 +47,32 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
 
   useEffect(() => {
     loadFeed();
+    loadLearningData();
   }, []);
+
+  const loadLearningData = async () => {
+    try {
+      console.log('📚 Loading learning data for user:', currentUserId);
+      
+      // Load learning recommendations, progress, and achievements in parallel
+      const [recommendations, progress, userAchievements] = await Promise.all([
+        learningService.getRecommendations(currentUserId),
+        learningService.getProgress(currentUserId),
+        learningService.getAchievements(currentUserId)
+      ]);
+      
+      console.log('📈 Learning recommendations:', recommendations);
+      console.log('📊 User progress:', progress);
+      console.log('🏆 Achievements:', userAchievements);
+      
+      setLearningRecommendations(recommendations || []);
+      setUserProgress(progress);
+      setAchievements(userAchievements || []);
+      
+    } catch (error) {
+      console.error('❌ Error loading learning data:', error);
+    }
+  };
 
 
   const loadFeed = async () => {
@@ -74,8 +105,9 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
       await hackerNewsService.syncStories();
       console.log('📱 Feed: Sync complete, loading fresh stories...');
       
-      // Then load the updated feed (animations will trigger automatically)
+      // Then load the updated feed and learning data
       await loadFeed();
+      await loadLearningData();
     } catch (error) {
       console.error('❌ Feed: Error during refresh:', error);
       // Still try to load feed even if sync fails
@@ -115,7 +147,120 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
     onScroll?.();
   };
 
-  // Insights rendering removed - showing only HackerNews stories
+  // Learning content rendering functions
+  const renderLearningProgress = () => {
+    if (!userProgress) return null;
+    
+    return (
+      <View style={styles.learningProgressCard}>
+        <View style={styles.progressHeader}>
+          <View style={styles.progressIcon}>
+            <Text style={styles.progressIconText}>🧠</Text>
+          </View>
+          <View style={styles.progressInfo}>
+            <Text style={styles.progressTitle}>Learning Journey</Text>
+            <Text style={styles.progressLevel}>Level: {userProgress.currentLevel}</Text>
+          </View>
+        </View>
+        
+        <Text style={styles.progressScore}>Overall Progress: {userProgress.overallProgressScore}%</Text>
+        
+        {userProgress.nextMilestones && userProgress.nextMilestones.length > 0 && (
+          <View style={styles.milestonesContainer}>
+            <Text style={styles.milestonesTitle}>Next Milestone:</Text>
+            {userProgress.nextMilestones.map((milestone, index) => (
+              <Text key={index} style={styles.milestoneText}>
+                📍 {milestone.skill} - {milestone.timeframe}
+              </Text>
+            ))}
+          </View>
+        )}
+        
+        <Text style={styles.motivationalText}>{userProgress.motivationalMessage}</Text>
+      </View>
+    );
+  };
+
+  const renderAchievement = (achievement) => (
+    <View style={styles.achievementCard} key={achievement.id}>
+      <View style={styles.achievementHeader}>
+        <View style={styles.achievementBadge}>
+          <Text style={styles.badgeEmoji}>🏆</Text>
+        </View>
+        <View style={styles.achievementInfo}>
+          <Text style={styles.achievementName}>{achievement.achievement.name}</Text>
+          <Text style={styles.achievementTier}>{achievement.achievement.tier} • {achievement.achievement.statusPoints} pts</Text>
+        </View>
+      </View>
+      
+      <Text style={styles.achievementDescription}>{achievement.achievement.description}</Text>
+      
+      <View style={styles.achievementFooter}>
+        <Text style={styles.achievementDate}>
+          Earned {new Date(achievement.earnedAt).toLocaleDateString()}
+        </Text>
+        <Text style={styles.rarityScore}>Rarity: {achievement.achievement.rarityScore}%</Text>
+      </View>
+    </View>
+  );
+
+  const renderLearningRecommendation = (recommendation) => (
+    <TouchableOpacity 
+      style={styles.recommendationCard}
+      key={`${recommendation.contentId}-${recommendation.contentType}`}
+      onPress={() => handleRecommendationPress(recommendation)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.recommendationHeader}>
+        <View style={styles.learningLogo}>
+          <Text style={styles.learningLogoText}>📚</Text>
+        </View>
+        <View style={styles.recommendationMeta}>
+          <Text style={styles.recommendationType}>{recommendation.contentType}</Text>
+          <Text style={styles.recommendationDifficulty}>
+            {recommendation.difficulty} • {recommendation.estimatedTimeMinutes}min
+          </Text>
+        </View>
+        <View style={styles.priorityBadge}>
+          <Text style={styles.priorityText}>{recommendation.priorityLevel}</Text>
+        </View>
+      </View>
+      
+      <Text style={styles.recommendationTitle}>{recommendation.title}</Text>
+      
+      <Text style={styles.recommendationReason}>{recommendation.whyRecommended}</Text>
+      
+      <View style={styles.recommendationFooter}>
+        <Text style={styles.learningValue}>
+          Learning Value: {recommendation.learningValue}/10
+        </Text>
+        <Text style={styles.relevanceScore}>
+          Relevance: {Math.round(recommendation.relevanceScore * 100)}%
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const handleRecommendationPress = async (recommendation) => {
+    try {
+      // Track the learning activity
+      await learningService.trackActivity(currentUserId, {
+        contentId: recommendation.contentId,
+        contentType: recommendation.contentType,
+        timeSpent: Math.floor(Math.random() * 10) + 5, // Simulate time spent
+        completed: true,
+        skillsApplied: recommendation.skillsAddressed || []
+      });
+      
+      Alert.alert(
+        'Learning Activity Tracked! 📈',
+        `You've engaged with "${recommendation.title}". This will help improve your recommendations and track your learning progress.`,
+        [{ text: 'Great!', style: 'default' }]
+      );
+    } catch (error) {
+      console.error('Error tracking learning activity:', error);
+    }
+  };
 
   const renderHackerNewsStory = (item: HackerNewsStory) => (
     <TouchableOpacity 
@@ -364,18 +509,46 @@ export const Feed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => 
 
         {/* Feed Content Section */}
         <View style={styles.feedSection}>
-          {feedItems.map((item, index) => (
-            <View key={item.id.toString()} style={styles.feedItemContainer}>
-              {renderHackerNewsStory(item)}
-            </View>
-          ))}
+          {/* Learning Progress Section */}
+          {renderLearningProgress()}
           
-          {!loading && feedItems.length === 0 && (
+          {/* Recent Achievements */}
+          {achievements.length > 0 && (
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>🏆 Recent Achievements</Text>
+              {achievements.slice(0, 2).map((achievement) => renderAchievement(achievement))}
+              {achievements.length > 2 && (
+                <Text style={styles.seeMoreText}>+ {achievements.length - 2} more achievements</Text>
+              )}
+            </View>
+          )}
+          
+          {/* Learning Recommendations */}
+          {learningRecommendations.length > 0 && (
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>📚 Recommended for You</Text>
+              {learningRecommendations.map((recommendation) => renderLearningRecommendation(recommendation))}
+            </View>
+          )}
+          
+          {/* HackerNews Stories */}
+          {feedItems.length > 0 && (
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>🗞️ Latest from HackerNews</Text>
+              {feedItems.map((item, index) => (
+                <View key={item.id.toString()} style={styles.feedItemContainer}>
+                  {renderHackerNewsStory(item)}
+                </View>
+              ))}
+            </View>
+          )}
+          
+          {!loading && feedItems.length === 0 && learningRecommendations.length === 0 && (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateIcon}>📰</Text>
-              <Text style={styles.emptyStateTitle}>No HackerNews stories available</Text>
+              <Text style={styles.emptyStateIcon}>📚</Text>
+              <Text style={styles.emptyStateTitle}>Welcome to your learning journey!</Text>
               <Text style={styles.emptyStateDescription}>
-                Pull down to refresh and load the latest stories from HackerNews.
+                Pull down to refresh and discover personalized content recommendations.
               </Text>
             </View>
           )}
@@ -863,5 +1036,240 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+  },
+  
+  // Learning component styles
+  sectionContainer: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  seeMoreText: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  
+  // Learning Progress Card
+  learningProgressCard: {
+    backgroundColor: '#f0f9ff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3b82f6',
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  progressIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  progressIconText: {
+    fontSize: 20,
+  },
+  progressInfo: {
+    flex: 1,
+  },
+  progressTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  progressLevel: {
+    fontSize: 14,
+    color: '#6b7280',
+    textTransform: 'capitalize',
+  },
+  progressScore: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1e40af',
+    marginBottom: 12,
+  },
+  milestonesContainer: {
+    marginBottom: 12,
+  },
+  milestonesTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  milestoneText: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginLeft: 8,
+  },
+  motivationalText: {
+    fontSize: 14,
+    color: '#059669',
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  
+  // Achievement Card
+  achievementCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+    borderLeftWidth: 3,
+    borderLeftColor: '#f59e0b',
+  },
+  achievementHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  achievementBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fef3c7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  badgeEmoji: {
+    fontSize: 16,
+  },
+  achievementInfo: {
+    flex: 1,
+  },
+  achievementName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  achievementTier: {
+    fontSize: 12,
+    color: '#6b7280',
+    textTransform: 'capitalize',
+  },
+  achievementDescription: {
+    fontSize: 14,
+    color: '#4b5563',
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  achievementFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  achievementDate: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  rarityScore: {
+    fontSize: 12,
+    color: '#f59e0b',
+    fontWeight: '500',
+  },
+  
+  // Learning Recommendation Card
+  recommendationCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+    borderLeftWidth: 3,
+    borderLeftColor: '#8b5cf6',
+  },
+  recommendationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  learningLogo: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: '#8b5cf6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  learningLogoText: {
+    fontSize: 16,
+  },
+  recommendationMeta: {
+    flex: 1,
+  },
+  recommendationType: {
+    fontSize: 12,
+    color: '#6b7280',
+    textTransform: 'capitalize',
+  },
+  recommendationDifficulty: {
+    fontSize: 12,
+    color: '#8b5cf6',
+    fontWeight: '500',
+  },
+  priorityBadge: {
+    backgroundColor: '#fecaca',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  priorityText: {
+    fontSize: 10,
+    color: '#dc2626',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  recommendationTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 8,
+    lineHeight: 22,
+  },
+  recommendationReason: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginBottom: 12,
+    lineHeight: 18,
+  },
+  recommendationFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  learningValue: {
+    fontSize: 12,
+    color: '#059669',
+    fontWeight: '500',
+  },
+  relevanceScore: {
+    fontSize: 12,
+    color: '#8b5cf6',
+    fontWeight: '500',
   },
 });

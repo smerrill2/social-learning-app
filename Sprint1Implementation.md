@@ -1,16 +1,41 @@
 # Sprint 1 Implementation Plan — Daily Learning Pack (MVP)
 
+Rebaseline: incorporate feature flags, revamp card/tile UI, and keep the Daily Pack as the default experience while allowing a flagged “Feed” variant for discovery/testing. This aligns with user feedback (avoid doomscroll, improve card quality, reduce HN‑only feel) without over‑scoping.
+
 Goal: Ship a finite, high‑signal daily learning pack with 12 tiles (≈15 minutes) and an in‑app nudge. No infinite scroll. Light personalization via More/Less and Saves. Gemini summaries are optional; fall back cleanly when missing.
 
 ## Scope (In)
-- Daily pack: 12 tiles per day with progress indicator and completion screen.
+- Daily pack: 12 tiles per day with progress indicator and completion screen (default home experience via flag).
 - Mix: 6 Research (≤14 days, arXiv DB), 3 HackerNews (≤48h), 3 Insights (topic‑matched or apply prompts).
 - In‑app nudge only (no push) to start/finish today’s pack.
 - Light controls: Save, More Like This, Less Like This.
 - Topics: AI/ML, Cognitive & Behavioral Science, Productivity & Habits (choose one during onboarding).
+- Feature flags to toggle feed vs pack, card style v2, and interleaved feed prototype.
+- Card/Tile UI Revamp (v2): unified, richer cards used in both Daily Pack and Feed.
 
 ## Scope (Out)
 - Quizzes/knowledge checks, deep Q&A, cohorts/social, long‑tail topics, push notifications.
+
+---
+
+## Feature Flags & Gating (Sprint 1)
+
+Minimal flags to let us ship the Daily Pack as the primary flow, while iterating on a better feed quietly:
+
+- `FLAG_PACK_AS_HOME` (default: true): Home opens Daily Pack; feed sits behind a tab/entry.
+- `FLAG_FEED_ENABLED` (default: false): Enables the feed screen in UI.
+- `FLAG_FEED_VARIANT` (default: `interleaved`): `hn_only` | `interleaved` | `algorithm_v1`.
+- `FLAG_UI_CARD_STYLE` (default: `v2`): Enables the revamped cards/tiles.
+- `FLAG_SUMMARY_ENABLED` (default: auto): On if keys exist; falls back gracefully when off.
+- `FLAG_INVITE_ONLY` (default: true): Require invite/whitelist for feed/algo endpoints; Daily Pack allowed.
+
+Delivery Options (pick simplest for MVP):
+- Backend‑driven flags: piggyback `GET /session/pack` to add `{ uiFlags: {...} }` for the day.
+- Or static ENV on mobile (Expo `EXPO_PUBLIC_*` vars) for immediate control.
+
+Gating:
+- Continue `DevBypassAuthGuard` for local/dev.
+- Add whitelist check when `FLAG_INVITE_ONLY=true` for `/algorithm/*` endpoints.
 
 ---
 
@@ -20,11 +45,13 @@ Goal: Ship a finite, high‑signal daily learning pack with 12 tiles (≈15 minu
   - New Session module for building and serving daily packs.
   - Keep storage minimal: cache packs and feedback in Redis for MVP; defer DB migrations.
   - Make Gemini summarization optional; never block on missing keys.
+  - Add feature‑flag exposure via `GET /session/pack` response (see API Contracts) and optional invite gating for `/algorithm/*`.
 
 - Mobile (React Native/Expo)
   - New Daily Pack screen with progress and finish UI.
   - Tile components for Research/HN/Insight with Save/More/Less actions.
   - In‑app nudge banner when today’s pack is incomplete.
+  - Feature‑flag handling to set default home (Pack) and choose Feed variant.
 
 ---
 
@@ -43,6 +70,7 @@ Goal: Ship a finite, high‑signal daily learning pack with 12 tiles (≈15 minu
   - Auth required (JWT).
   - Returns idempotent pack for (userId, day). Cache in Redis with key `session:pack:${userId}:${YYYYMMDD}` TTL 24h.
   - Optional query: `topic` to override daily topic (for testing).
+  - Includes `{ uiFlags }` object to control client presentation (see API contracts).
 
 - `POST /content/feedback`
   - Auth required (JWT).
@@ -97,6 +125,13 @@ Goal: Ship a finite, high‑signal daily learning pack with 12 tiles (≈15 minu
 {
   date: "YYYY-MM-DD",
   topic: string,
+  uiFlags?: {
+    packAsHome: boolean,
+    feedEnabled: boolean,
+    feedVariant: 'hn_only' | 'interleaved' | 'algorithm_v1',
+    cardStyle: 'v1' | 'v2',
+    summaryEnabled: boolean,
+  },
   items: Array<{
     id: string | number,
     source: 'research' | 'hackernews' | 'insight',
@@ -120,31 +155,58 @@ Goal: Ship a finite, high‑signal daily learning pack with 12 tiles (≈15 minu
 
 ---
 
+## UI/UX Revamp — Cards & Tiles v2
+
+Unified card design used in both Daily Pack and Feed (when enabled):
+
+- Header Bar: source pill (HN/RX/💡), domain, time‑ago, reading‑minutes.
+- Title: 1–2 lines, strong weight, better truncation.
+- TL;DR: up to ~280 chars; if summary disabled/missing, show excerpt; balanced line‑height.
+- Why It Matters: one‑liner rationale, derived from topic and/or paradigms (for research).
+- Footer actions: Save, More, Less, Open; optimistic UI; subtle haptics.
+- Visual polish: soft shadow, subtle gradient background, consistent spacing; gentle scroll‑reveal animation.
+- Color system: HN = orange, Research = green, Insight = blue; accessible contrasts.
+
+Feed Variant (flagged):
+- `interleaved`: mix HN + Research + Insights in a single list using the same card.
+- Section headers optional; avoid HN‑only feel.
+
+---
+
 ## Mobile Work
 
 ### 1) API Client
 - File: `social-learning-app/mobile/src/services/api.ts`
   - Add `sessionService.getPack(): Promise<PackResponse>`.
   - Add `contentService.sendFeedback(itemId, source, action)`.
+  - Add `configService.getUiFlags()` if we split flags endpoint; otherwise read `uiFlags` from `/session/pack`.
 
 ### 2) Screens/Components
 - Files:
   - `social-learning-app/mobile/src/screens/DailyPack.tsx` — orchestrates the 12‑tile session with progress.
-  - `social-learning-app/mobile/src/components/tiles/ResearchTile.tsx`
-  - `social-learning-app/mobile/src/components/tiles/HackerNewsTile.tsx`
-  - `social-learning-app/mobile/src/components/tiles/InsightTile.tsx`
+  - `social-learning-app/mobile/src/components/cards/UnifiedCard.tsx` — v2 card for all sources.
+  - (Optional) thin wrappers: `ResearchCard.tsx`, `HackerNewsCard.tsx`, `InsightCard.tsx` that compose `UnifiedCard`.
   - `social-learning-app/mobile/src/components/NudgeBanner.tsx` — shows when pack incomplete.
   - `social-learning-app/mobile/src/screens/PackComplete.tsx` — completion card with streak and one apply suggestion.
 - Update `App.tsx` to surface `NudgeBanner` on home and route to `DailyPack`.
+  - Feature flag: when `FLAG_FEED_ENABLED=true`, show a Feed tab; use `FLAG_FEED_VARIANT` to switch provider.
 
 ### 3) Interactions
 - Per‑tile actions: Save, More, Less → optimistic UI and `sendFeedback`.
 - Link‑outs: open in browser; record `tile_open_link` event.
+ - Use shared action row component across Pack and Feed.
 
 ### 4) UX Notes
 - Progress header: step X/12, optional elapsed timer (soft, not a gate).
 - No infinite scroll; swipe/scroll within the finite list only.
 - On completion: show `PackComplete` with summary and CTA to review saved items.
+ - Cards share identical look/feel in Pack and Feed to avoid context switch.
+
+### 5) Feed (Flagged)
+- If `FLAG_FEED_ENABLED=true`, enable a discovery feed:
+  - `hn_only`: current HN stories (temporary)
+  - `interleaved` (preferred): stitch HN + Research + Insights (no persona doomscroll), same cards.
+  - `algorithm_v1`: uses `/algorithm/feed` when stable; still capped by UX guidelines.
 
 ---
 
@@ -175,9 +237,10 @@ Goal: Ship a finite, high‑signal daily learning pack with 12 tiles (≈15 minu
 
 ### Mobile (lightweight)
 - Component tests (if test infra present):
-  - `DailyPack` shows 12 steps and advances progress.
+  - `DailyPack` shows 12 steps and advances progress with v2 cards.
   - NudgeBanner shows when pack incomplete; hides after completion.
-  - Tile components call `sendFeedback` on actions (mocked API).
+  - UnifiedCard actions call `sendFeedback` (mocked API).
+  - Feature flag routing renders Pack as home and hides Feed by default; enabling flag shows Feed with `interleaved` variant.
 
 ---
 
@@ -189,34 +252,41 @@ Week 1 — Session Builder and API
 - [ ] Topic mapping utilities for the 3 tracks.
 - [ ] Interleave logic and enrichment (reading time, why‑it‑matters template).
 - [ ] Unit tests for service and basic e2e for auth + shape.
+ - [ ] Add `uiFlags` to `/session/pack` response; simple ENV‑backed values.
 
 Week 2 — Summaries and Fallbacks
 - [ ] Make Gemini optional in HN service (no throws); add flag.
 - [ ] ArXiv helper `getRecentByTopic`; TL;DR fallback to abstract excerpt.
 - [ ] Plug summaries into Session enrichment when available.
 - [ ] Expand tests for 48h/14d constraints and Gemini‑absent paths.
+ - [ ] Implement invite‑only gating for `/algorithm/*` when `FLAG_INVITE_ONLY=true`.
 
 Week 3 — Mobile Session UI
 - [ ] Add `sessionService` and `contentService` to `api.ts`.
 - [ ] Build `DailyPack.tsx` with progress and 12‑tile flow.
-- [ ] Implement Research/HN/Insight tiles with Save/More/Less and link‑out.
+- [ ] Implement UnifiedCard v2 and swap into Pack.
 - [ ] Add `NudgeBanner` and route from home; `PackComplete` screen.
+- [ ] Feature flag handler (Pack as home, Feed enabled, Feed variant).
 
 Week 4 — Polish, Signals, and Instrumentation
 - [ ] Implement `POST /content/feedback` and wire mobile actions.
 - [ ] Optimistic UI for Save/More/Less; adjust next‑day knobs slightly (server‑side).
 - [ ] Instrumentation: fire minimal events; log to console or stub service.
 - [ ] Finalize tests; fix edge cases (sparse topics, Redis down, partial fetch).
+- [ ] (Flagged) Enable `interleaved` feed variant behind tab; reuse UnifiedCard.
 
 ---
 
 ## Acceptance Criteria (MVP)
 - Pack returns exactly 12 items (6 research, 3 HN, 3 insights), stable per day.
 - Freshness constraints enforced: HN ≤48h; Research ≤14d.
-- App shows finite progress and completion; no infinite scroll anywhere in session flow.
+- Daily Pack is the default home (via flag); Feed is off by default and discoverable only when `FLAG_FEED_ENABLED=true`.
+- Cards use v2 design consistently across Pack (and Feed when enabled).
+- App shows finite progress and completion; no infinite scroll in Daily Pack.
 - In‑app nudge appears only when pack incomplete and is dismissible.
 - Save/More/Less actions persist and do not break flow; next‑day pack reflects signals modestly.
 - Works with and without Gemini key; no crashes when Redis unavailable.
+- (If Feed enabled) Interleaved feed avoids HN‑only feel by mixing sources with the same card design.
 
 ---
 
@@ -224,6 +294,7 @@ Week 4 — Polish, Signals, and Instrumentation
 - Sparse content days → oversample + backfill within track; maintain 12 tiles.
 - Gemini dependency → flag off and fall back to metadata/abstract excerpt.
 - Over‑scope → quizzes/Q&A/social deferred to Phase 2 after signal.
+- Fragmented UX → unify card design across Pack and Feed; ship Pack as default.
 
 ---
 
@@ -233,13 +304,15 @@ Week 4 — Polish, Signals, and Instrumentation
   - `src/app.module.ts` (import SessionModule)
   - `src/hackernews/hackernews.service.ts` (make Gemini optional)
   - `src/arxiv/arxiv.service.ts` (add helper)
+  - `src/session/session.service.ts` (add `uiFlags`)
+  - `src/auth/*` (optional invite‑only `FLAG_INVITE_ONLY` gating for `/algorithm/*`)
   - Tests under `src/session/*.spec.ts`, update/add HN/ArXiv specs
 - Mobile
   - `src/services/api.ts` (add session + feedback)
   - `src/screens/DailyPack.tsx` (new)
   - `src/screens/PackComplete.tsx` (new)
-  - `src/components/tiles/*` (new)
+  - `src/components/cards/UnifiedCard.tsx` (new) and wrappers
   - `App.tsx` (nudge + routing)
+  - (Flag) Feed tab wiring and provider swap by `FLAG_FEED_VARIANT`
 
 This plan is intentionally lean: it nails the core “12 tiles in 15 minutes” experience, keeps dependencies optional, and sets us up to layer quizzes and deeper personalization in Phase 2 once we see user signal.
-

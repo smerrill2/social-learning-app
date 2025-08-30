@@ -48,7 +48,7 @@ export interface LearningGoals {
 
 @Entity('user_learning_profiles')
 export class UserLearningProfile {
-  @PrimaryColumn('uuid')
+  @PrimaryColumn()
   userId: string;
 
   // Core skill assessments for different domains
@@ -94,7 +94,5 @@ export class UserLearningProfile {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'userId' })
-  user: User;
+  // Note: userId is a string identifier (username), not a foreign key to User table
 }

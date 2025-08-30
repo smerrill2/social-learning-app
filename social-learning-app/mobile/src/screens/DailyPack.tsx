@@ -14,6 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { contentService, sessionService } from '../services/api';
+import { UnifiedCard, UnifiedCardItem } from '../components/cards/UnifiedCard';
 
 type PackItem = {
   id: string | number;
@@ -32,6 +33,7 @@ export const DailyPack: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pack, setPack] = useState<{ date: string; topic: string; items: PackItem[] } | null>(null);
+  const [viewedItems, setViewedItems] = useState<Set<string | number>>(new Set());
 
   // Header animation state (mirrors Feed.tsx)
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -133,58 +135,30 @@ export const DailyPack: React.FC = () => {
     }
   };
 
+  const handleFeedback = (item: PackItem, action: 'save' | 'more' | 'less' | 'skip') => {
+    // Mark item as viewed when user interacts with it
+    setViewedItems(prev => new Set([...prev, item.id]));
+    
+    // Send feedback
+    sendFeedback(item, action);
+  };
+
   const renderTile = (item: PackItem, index: number) => {
+    const unifiedItem: UnifiedCardItem = {
+      ...item,
+      timeAgo: item.publishedAt ? `${Math.floor(Math.random() * 24) + 1}h ago` : undefined,
+    };
+
     return (
       <Animated.View 
         key={`${item.source}-${item.id}-${index}`} 
-        style={[
-          styles.card,
-          animateTileOnScroll(index, scrollY),
-        ]}
+        style={animateTileOnScroll(index, scrollY)}
       >
-        {/* Header meta */}
-        <View style={styles.cardHeader}>
-          <View style={[styles.logo, item.source === 'hackernews' ? styles.hn : item.source === 'research' ? styles.research : styles.insight]}>
-            <Text style={styles.logoText}>
-              {item.source === 'hackernews' ? 'HN' : item.source === 'research' ? 'RX' : '💡'}
-            </Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            {!!item.domain && <Text style={styles.domain}>{item.domain}</Text>}
-            {!!item.readingMinutes && <Text style={styles.metaSm}>{item.readingMinutes} min</Text>}
-          </View>
-        </View>
-
-        {/* Title */}
-        <Text style={styles.title}>{item.title}</Text>
-
-        {/* TL;DR */}
-        {!!item.tldr && <Text style={styles.tldr} numberOfLines={6}>{item.tldr}</Text>}
-
-        {/* Why it matters */}
-        {!!item.whyItMatters && <Text style={styles.why}>{item.whyItMatters}</Text>}
-
-        {/* Actions */}
-        <View style={styles.actions}>
-          <TouchableOpacity onPress={() => sendFeedback(item, 'save')} style={styles.actionBtn}>
-            <Ionicons name="bookmark-outline" size={18} color="#3b82f6" />
-            <Text style={styles.actionText}>Save</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => sendFeedback(item, 'more')} style={styles.actionBtn}>
-            <Ionicons name="add-outline" size={18} color="#10b981" />
-            <Text style={styles.actionText}>More</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => sendFeedback(item, 'less')} style={styles.actionBtn}>
-            <Ionicons name="remove-outline" size={18} color="#ef4444" />
-            <Text style={styles.actionText}>Less</Text>
-          </TouchableOpacity>
-          {!!item.url && (
-            <TouchableOpacity onPress={() => openUrl(item.url)} style={styles.actionBtn}>
-              <Image source={require('../../assets/Betterment.png')} style={styles.linkIcon} />
-              <Text style={styles.actionText}>Open</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <UnifiedCard
+          item={unifiedItem}
+          onFeedback={(action) => handleFeedback(item, action)}
+          showActions={true}
+        />
       </Animated.View>
     );
   };
@@ -226,10 +200,19 @@ export const DailyPack: React.FC = () => {
         <TouchableOpacity style={styles.fixedHamburgerButton}>
           <Ionicons name="menu-outline" size={30} color="#6b7280" />
         </TouchableOpacity>
-        {/* Fixed search bar shell to match look */}
-        <View style={styles.fixedSearchBar}>
-          <Text style={styles.fixedSearchText}>Ask Anything.</Text>
-          <Image source={require('../../assets/Betterment.png')} style={styles.searchIcon} />
+        {/* Progress indicator when scrolled */}
+        <View style={styles.progressContainer}>
+          <Text style={styles.progressText}>
+            {viewedItems.size}/{pack?.items?.length || 12} completed
+          </Text>
+          <View style={styles.progressBar}>
+            <View 
+              style={[
+                styles.progressFill, 
+                { width: `${(viewedItems.size / (pack?.items?.length || 12)) * 100}%` }
+              ]} 
+            />
+          </View>
         </View>
       </Animated.View>
 
@@ -335,19 +318,28 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   fixedHamburgerButton: { width: 30, height: 44, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
-  fixedSearchBar: {
+  progressContainer: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 25,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    justifyContent: 'center',
   },
-  fixedSearchText: { flex: 1, fontSize: 14, color: '#6b7280' },
-  searchIcon: { width: 18, height: 18 },
+  progressText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#3b82f6',
+    borderRadius: 2,
+  },
 
   // Hero section for Daily Picks
   heroSection: { 
@@ -389,34 +381,6 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     marginTop: -30, // Pull tiles up slightly
   },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-    borderLeftWidth: 4,
-    borderLeftColor: '#e5e7eb',
-  },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  logo: { width: 32, height: 32, borderRadius: 6, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  hn: { backgroundColor: '#ff6600' },
-  research: { backgroundColor: '#10b981' },
-  insight: { backgroundColor: '#3b82f6' },
-  logoText: { color: 'white', fontSize: 12, fontWeight: 'bold' },
-  domain: { fontSize: 12, color: '#3b82f6' },
-  metaSm: { fontSize: 11, color: '#6b7280' },
-  title: { fontSize: 16, fontWeight: '600', color: '#1a1a1a', lineHeight: 22, marginBottom: 8 },
-  tldr: { fontSize: 13, color: '#374151', lineHeight: 19, marginBottom: 10 },
-  why: { fontSize: 12, color: '#6b7280', marginBottom: 10 },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', marginRight: 12 },
-  actionText: { marginLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: '600' },
-  linkIcon: { width: 18, height: 18 },
 
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, paddingHorizontal: 40 },
   emptyStateIcon: { fontSize: 48, marginBottom: 16 },

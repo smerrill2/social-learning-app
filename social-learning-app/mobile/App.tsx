@@ -10,11 +10,13 @@ import {
   Animated,
 } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LoginForm } from './src/components/LoginForm';
 import { RegisterForm } from './src/components/RegisterForm';
 import { Feed } from './src/components/Feed';
-import { DemoFeed } from './src/components/DemoFeed';
+
+import { MockFeed } from './src/components/MockFeed';
 import DailyPack from './src/screens/DailyPack';
 import { BottomNavigation } from './src/components/BottomNavigation';
 import { AuthProvider, useAuth } from './src/hooks/useAuth';
@@ -213,7 +215,7 @@ function AppContent() {
         {/* Main Content */}
         <View style={styles.mainContent}>
           {activeTab === 'home' ? (
-            <Feed 
+            <MockFeed 
               onOpenAlgorithmSettings={handleOpenAlgorithmSettings} 
               onScroll={undefined}
             />
@@ -298,10 +300,12 @@ const styles = StyleSheet.create({
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

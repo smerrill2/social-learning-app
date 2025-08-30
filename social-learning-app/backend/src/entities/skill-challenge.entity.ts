@@ -78,12 +78,8 @@ export class SkillChallenge {
   status: ChallengeStatus;
 
   // Creation and curation
-  @ManyToOne(() => User, { nullable: true })
-  @JoinColumn({ name: 'createdBy' })
-  creator: User;
-
-  @Column('uuid', { nullable: true })
-  createdBy: string;
+  @Column({ nullable: true })
+  createdBy: string; // username, not UUID
 
   @Column({ type: 'int', default: 0 })
   completionCount: number;
@@ -106,18 +102,14 @@ export class ChallengeAttempt {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'userId' })
-  user: User;
-
-  @Column('uuid')
-  userId: string;
+  @Column()
+  userId: string; // username, not UUID
 
   @ManyToOne(() => SkillChallenge)
   @JoinColumn({ name: 'challengeId' })
   challenge: SkillChallenge;
 
-  @Column('uuid')
+  @Column()
   challengeId: string;
 
   // Attempt data

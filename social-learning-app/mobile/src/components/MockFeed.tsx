@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   Image,
 } from 'react-native';
-import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SimpleTile } from './SimpleTile';
@@ -24,13 +23,14 @@ interface Props {
 }
 
 export const MockFeed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll }) => {
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isScrolled, setIsScrolled] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [currentPage, setCurrentPage] = useState(0); // 0 = tiles, 1 = AI answer
+  const [heroLocked, setHeroLocked] = useState(false); // Once true, hero is permanently hidden
+  const [hasEngagedWithContent, setHasEngagedWithContent] = useState(false);
+  const [isPullingRefresh, setIsPullingRefresh] = useState(false);
   const [initialQuestionIntent, setInitialQuestionIntent] = useState<{
     question: string;
     fromPageX: number;
@@ -39,11 +39,16 @@ export const MockFeed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll })
   
   const scrollY = useRef(new Animated.Value(0)).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current; // Start at page 0 (tiles)
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
-  const gestureX = useRef(new Animated.Value(0)).current;
+  // Fade-in animation for tiles after refresh completes
+  const NUM_TILES = 10;
+  const fadeInAnims = useRef(Array.from({ length: NUM_TILES }, () => new Animated.Value(1))).current;
+  const scrollViewRef = useRef<any>(null);
   const screenWidth = Dimensions.get('window').width;
-  const screenHeight = Dimensions.get('window').height;
+  const CONTENT_ENGAGEMENT_THRESHOLD = 400; // After scrolling 400px, lock the hero
+  const TILES_START_POSITION = 350; // Where tiles begin
+  const HEADER_HEIGHT = 45; // Keep in sync with styles.fixedHeader.height
+  const MASK_HEIGHT = 50; // Keep in sync with styles.contentMask.height (if used)
+  const REFRESH_OFFSET = HEADER_HEIGHT; // Offset spinner below header (mask removed)
   const headerProgress = scrollY.interpolate({
     inputRange: [150, 250],  // Header appears after hero text is gone
     outputRange: [0, 1],
@@ -75,19 +80,19 @@ export const MockFeed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll })
     outputRange: [0, 1],
     extrapolate: 'clamp',
   });
-  
-  // Calculate when all tiles are done generating (last tile at index 9)
-  const lastTileDelay = 9 * 30; // 9th tile (0-indexed) with 30ms delays
-  const generationCompleteAt = 180 + lastTileDelay; // 180 + 270 = 450px scroll
-  
-  // Sticky behavior during generation, then release
-  const tilesCounterScroll = scrollY.interpolate({
-    inputRange: [0, 450, 550],  // Stick until 450px (all tiles done), then gradually release
-    outputRange: [0, -450, -450],  // Stay at top during generation, then stop counter-scrolling
+  // Simple tiles appearance animation
+  const tilesTranslateY = scrollY.interpolate({
+    inputRange: [0, 150, 250],
+    outputRange: [100, 50, 0],
     extrapolate: 'clamp',
   });
 
   useEffect(() => {
+    console.log('🚀 MockFeed mounted - Initial state:');
+    console.log('  Hero locked:', heroLocked);
+    console.log('  Tiles start position:', TILES_START_POSITION);
+    console.log('  Engagement threshold:', CONTENT_ENGAGEMENT_THRESHOLD);
+    
     const startBounce = () => {
       Animated.loop(
         Animated.sequence([
@@ -130,7 +135,32 @@ export const MockFeed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll })
     };
   }, []);
 
+  // Trigger staggered fade-in when a refresh completes
+  const prevRefreshing = useRef(false);
+  useEffect(() => {
+    if (prevRefreshing.current && !refreshing) {
+      fadeInAnims.forEach(v => v.setValue(0));
+      Animated.stagger(
+        40,
+        fadeInAnims.map(v =>
+          Animated.timing(v, { toValue: 1, duration: 250, useNativeDriver: true })
+        )
+      ).start();
+    }
+    prevRefreshing.current = refreshing;
+  }, [refreshing]);
+
+  // Keep tiles visible when hero locks by removing hero gap (no jump scroll)
+  useEffect(() => {
+    if (heroLocked) {
+      requestAnimationFrame(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+      });
+    }
+  }, [heroLocked]);
+
   const handleQuestionClick = (question: string, e?: any) => {
+    console.log('❓ Question clicked:', question);
     // Expand into dynamic navigator and forward the originating touch
     if (e?.nativeEvent) {
       setInitialQuestionIntent({
@@ -144,56 +174,33 @@ export const MockFeed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll })
     setIsExpanded(true);
   };
 
-  const handlePageSwipe = (page: number) => {
-    setCurrentPage(page);
-    Animated.timing(slideAnim, {
-      toValue: page === 0 ? 0 : -screenWidth, // page 0 = show tiles, page 1 = show AI answer
-      duration: 400,
-      useNativeDriver: true,
-    }).start();
-  };
 
-  const onGestureEvent = Animated.event(
-    [{ nativeEvent: { translationX: gestureX } }],
-    { useNativeDriver: true }
-  );
-
-  const onHandlerStateChange = (event: any) => {
-    if (event.nativeEvent.state === State.END) {
-      const { translationX, velocityX } = event.nativeEvent;
-      const threshold = screenWidth * 0.25; // 25% of screen width
-      
-      let targetPage = currentPage;
-      
-      // Determine target page based on swipe distance and velocity
-      if (translationX > threshold || velocityX > 500) {
-        // Swipe right - go to previous page (tiles)
-        targetPage = 0;
-      } else if (translationX < -threshold || velocityX < -500) {
-        // Swipe left - go to next page (AI answer)
-        targetPage = 1;
-      }
-      
-      // Reset gesture value
-      gestureX.setValue(0);
-      
-      // Animate to target page
-      if (targetPage !== currentPage) {
-        handlePageSwipe(targetPage);
-      } else {
-        // Spring back to current page
-        Animated.spring(slideAnim, {
-          toValue: currentPage === 0 ? 0 : -screenWidth,
-          useNativeDriver: true,
-        }).start();
-      }
-    }
-  };
 
   const onRefresh = async () => {
+    console.log('🔄 REFRESH TRIGGERED!');
+    console.log('📍 Hero locked state:', heroLocked);
+    console.log('📊 Current scroll position:', (scrollY as any)._value || 'unknown');
+    
     setRefreshing(true);
-    // Simulate refresh delay
-    setTimeout(() => setRefreshing(false), 1000);
+    
+    // When refreshing with hero locked, generate new content
+    if (heroLocked) {
+      console.log('🔒 Refreshing in LOCKED mode - Loading new content...');
+      // Simulate loading new content
+      setTimeout(() => {
+        console.log('✅ New content loaded! Positioning at tiles...');
+        setRefreshing(false);
+        // With hero locked, hero gap removed; keep content at top
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      }, 1500);
+    } else {
+      console.log('🔓 Refreshing in HERO mode - Standard refresh...');
+      // Normal refresh when hero is still visible
+      setTimeout(() => {
+        console.log('✅ Standard refresh complete!');
+        setRefreshing(false);
+      }, 1500);
+    }
   };
 
   const handleSearch = () => {
@@ -202,7 +209,20 @@ export const MockFeed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll })
   };
 
   const handleScroll = (event: any) => {
-    const offsetY = event.nativeEvent.contentOffset.y;
+    let offsetY = event.nativeEvent.contentOffset.y;
+    
+    // Check if user has engaged enough to lock the hero
+    if (!heroLocked && offsetY > CONTENT_ENGAGEMENT_THRESHOLD) {
+      console.log('🎯 HERO LOCK TRIGGERED! User has engaged with content');
+      setHeroLocked(true);
+      setHasEngagedWithContent(true);
+    }
+    
+    // When hero is locked, allow normal scrolling; hero area is removed
+    
+    // Track pull-to-refresh gesture when at/above top
+    setIsPullingRefresh(offsetY < 0);
+
     scrollY.setValue(offsetY);
     setIsScrolled(offsetY > 10);
     onScroll?.();
@@ -222,21 +242,22 @@ export const MockFeed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll })
       end={{ x: 1, y: 1 }}
       style={styles.container}
     >
-      {/* Content Mask - prevents content from showing through header area */}
-      <View style={styles.contentMask} pointerEvents="none" />
+      {/* Removed Content Mask to avoid covering the native RefreshControl */}
+      
+      { /* Compute whether hero overlay is shown for layout decisions */ }
       
       {/* Fixed Header Container */}
       <Animated.View
         style={[
           styles.fixedHeader,
           {
-            opacity: headerProgress,
+            opacity: heroLocked ? 1 : headerProgress,
             transform: [{
-              translateY: headerTranslateY
+              translateY: heroLocked ? 0 : headerTranslateY
             }],
           }
         ]}
-        pointerEvents={isScrolled ? 'auto' : 'none'}
+        pointerEvents={heroLocked || isScrolled ? 'auto' : 'none'}
       >
         {/* Search Bar */}
         <View style={styles.fixedSearchBar}>
@@ -271,14 +292,15 @@ export const MockFeed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll })
       </Animated.View>
 
 
-      {/* Hero Overlay (visual only, does not push content) */}
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.heroOverlay,
-          { opacity: heroOpacity, transform: [{ translateY: heroTranslateY }] },
-        ]}
-      >
+      {/* Hero Overlay - Hidden when hero is locked or refreshing */}
+      {(!heroLocked && !refreshing && !isPullingRefresh) && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.heroOverlay,
+            { opacity: heroOpacity, transform: [{ translateY: heroTranslateY }] },
+          ]}
+        >
         <View style={styles.searchHeaderSection}>
           <Animated.Text 
             style={[
@@ -345,11 +367,16 @@ export const MockFeed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll })
             </Animated.View>
           </Animated.View>
         </View>
-      </Animated.View>
+        </Animated.View>
+      )}
 
       <Animated.ScrollView
+        ref={scrollViewRef}
         style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: (!heroLocked && !refreshing && !isPullingRefresh) ? TILES_START_POSITION : 0 }
+        ]}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { 
@@ -359,18 +386,30 @@ export const MockFeed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll })
         )}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
+        // Let ScrollView control its own offset; we programmatically scroll when needed
+        alwaysBounceVertical={true}
+        bounces={true}
+        contentInsetAdjustmentBehavior="never"
+        onScrollBeginDrag={() => {
+          console.log('👆 Scroll drag started');
+        }}
+        onScrollEndDrag={(event) => {
+          const offsetY = event.nativeEvent.contentOffset.y;
+          console.log('👇 Scroll drag ended at:', offsetY);
+        }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh}
+            tintColor="rgb(4, 219, 235)"
+            // Place spinner below the fixed header so it remains visible
+            progressViewOffset={REFRESH_OFFSET}
+          />
         }
       >
         {/* Hero moved to overlay above. Scroll content begins near top. */}
 
-        {/* Dynamic Feed Navigator - Handles multiple screens and connections */}
-        {isExpanded && (
-          <View style={styles.dynamicNavigatorContainer}>
-            <DynamicFeedNavigator initialQuestionIntent={initialQuestionIntent} />
-          </View>
-        )}
+        {/* Content moved outside ScrollView - see below */}
 
         {/* Removed fixed top tile overlay to make tiles fully scrollable */}
 
@@ -378,29 +417,29 @@ export const MockFeed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll })
         {/* Content Area - Example feed list */}
         <View style={styles.contentSection}>
           {/* Example list of feed items */}
-          {/* Tiles container with sticky behavior during generation */}
+          {/* Tiles container with simple appearance animation */}
           <Animated.View 
             style={{
-              transform: [{ translateY: tilesCounterScroll }],
-              paddingBottom: 100, // Extra space so users see tiles aren't cut off
+              transform: [{ translateY: (heroLocked || refreshing || isPullingRefresh) ? 0 : tilesTranslateY }],
+              // Keep container opacity at 1 when refreshing/pulling/locked so content stays visible
+              opacity: (heroLocked || refreshing || isPullingRefresh) ? 1 : tilesAppearOpacity,
+              paddingBottom: 100,
             }}
           >
-            {/* Visual indicator that content is generating */}
-            <Animated.View 
-              style={{
-                opacity: scrollY.interpolate({
-                  inputRange: [140, 180, 450, 470],
-                  outputRange: [0, 1, 1, 0], // Show during generation, hide after
-                  extrapolate: 'clamp',
-                }),
-                marginBottom: 20,
-                paddingHorizontal: 16,
-              }}
-            >
-              <Text style={{ color: '#6b7280', fontSize: 12, fontStyle: 'italic' }}>
-                
+            {/* Content status indicator */}
+            <View style={{ marginBottom: 20, paddingHorizontal: 16 }}>
+              <Text style={{ color: '#6b7280', fontSize: 11, fontStyle: 'italic', textAlign: 'center' }}>
+                {refreshing 
+                  ? '🔄 Loading fresh content...' 
+                  : hasEngagedWithContent 
+                    ? '✨ Your personalized feed' 
+                    : '👇 Scroll to discover'}
               </Text>
-            </Animated.View>
+              {/* Debug info - remove in production */}
+              <Text style={{ color: '#9ca3af', fontSize: 10, textAlign: 'center', marginTop: 4 }}>
+                Hero: {heroLocked ? 'Locked' : 'Visible'} | Refreshing: {refreshing ? 'Yes' : 'No'}
+              </Text>
+            </View>
             
             {Array.from({ length: 10 }).map((_, i) => {
               // Create staggered opacity for each tile
@@ -415,11 +454,17 @@ export const MockFeed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll })
                 <Animated.View 
                   key={`feed-tile-${i}`}
                   style={{ 
-                    opacity: Animated.multiply(tilesAppearOpacity, tileOpacity),
+                    // Base opacity from scroll-driven appearance unless we're forcing visibility
+                    opacity: (heroLocked || refreshing || isPullingRefresh)
+                      ? fadeInAnims[i]
+                      : Animated.multiply(
+                          Animated.multiply(tilesAppearOpacity, tileOpacity),
+                          fadeInAnims[i]
+                        ),
                     marginBottom: i === 9 ? 40 : 0, // Extra space after last tile
                   }}
                 >
-                  <SimpleTile onQuestionClick={handleQuestionClick as any} />
+                  <SimpleTile loading={refreshing} onQuestionClick={handleQuestionClick as any} />
                 </Animated.View>
               );
             })}
@@ -454,6 +499,19 @@ export const MockFeed: React.FC<Props> = ({ onOpenAlgorithmSettings, onScroll })
           </View>
         </View>
       </Animated.ScrollView>
+
+      {/* Dynamic Feed Navigator - Now outside ScrollView as full-screen overlay */}
+      {isExpanded && (
+        <View style={styles.fullScreenOverlay}>
+          <DynamicFeedNavigator 
+            initialQuestionIntent={initialQuestionIntent} 
+            onClose={() => {
+              setIsExpanded(false);
+              setInitialQuestionIntent(null);
+            }}
+          />
+        </View>
+      )}
     </LinearGradient>
   );
 };
@@ -474,7 +532,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingTop: 510, // Increased to account for full sticky generation phase
+    paddingTop: 350, // Simplified padding for hero section
   },
   searchHeaderSection: {
     height: Dimensions.get('window').height,
@@ -485,9 +543,9 @@ const styles = StyleSheet.create({
   },
   contentSection: {
     paddingHorizontal: 16,
-    paddingTop: 100, // More space below header for generation
+    paddingTop: 20,
     position: 'relative',
-    minHeight: Dimensions.get('window').height * 2, // Ensure scrollability
+    minHeight: Dimensions.get('window').height * 1.5,
   },
   floatingHamburger: {
     position: 'absolute',
@@ -575,7 +633,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: 45,
     zIndex: 199,
-    backgroundColor: 'transparent',
+    backgroundColor: 'white',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
@@ -624,14 +682,15 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   
-  // Dynamic Navigator Container
-  dynamicNavigatorContainer: {
+  // Full screen overlay for Dynamic Navigator
+  fullScreenOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 200,
+    zIndex: 300,
+    backgroundColor: 'white',
   },
   // Experimental content area styles
   experimentalArea: {
