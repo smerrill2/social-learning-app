@@ -11,35 +11,54 @@ import {
   GestureResponderEvent,
   ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenData, ConnectionLine, NavigationState, Point } from '../../types/navigationTypes';
 import { ConnectionLineRenderer } from './ConnectionLineRenderer';
-import { SimpleTile } from '../SimpleTile';
+import { useSessionStore } from '../../stores/sessionStore';
+import { MockFeedContent } from '../MockFeedContent';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PARALLAX = 30; // px parallax offset for in-between pages
 
 interface Props {
-  initialTileContent?: any;
-  initialQuestionIntent?: {
-    question: string;
-    fromPageX: number;
-    fromPageY: number;
-  } | null;
   onClose?: () => void;
+  onOpenAlgorithmSettings?: () => void;
+  onQuestionClick?: (question: string, e?: any) => void;
+  onScroll?: () => void;
 }
 
-export const DynamicFeedNavigator: React.FC<Props> = ({ initialTileContent, initialQuestionIntent, onClose }) => {
-  const [navigationState, setNavigationState] = useState<NavigationState>({
-    screens: [],
-    currentScreenIndex: 0,
-    activeConnections: [],
-    isTransitioning: false,
-  });
+export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithmSettings, onQuestionClick, onScroll }) => {
+  // Use SessionStore instead of local state
+  const { 
+    currentSession,
+    currentScreenIndex, 
+    setCurrentScreenIndex, 
+    addQuestionToCurrentSession, 
+    totalPages,
+    isOnMockFeed
+  } = useSessionStore();
 
-  const slideAnim = useRef(new Animated.Value(0)).current; // pager position in px (negative to move left)
-  const overlaySlide = useRef(new Animated.Value(0)).current; // one-time entrance from right
+  // Local animation state
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // Get screens from current session
+  const screens = currentSession?.screens || [];
+
+  // Sync slide animation with SessionStore currentScreenIndex
+  React.useEffect(() => {
+    slideAnim.setValue(-currentScreenIndex * SCREEN_WIDTH);
+  }, [currentScreenIndex, slideAnim]);
+
+  // Debug: log state changes
+  React.useEffect(() => {
+    try {
+      console.log('[Navigator] screens:', screens.map(s => s.type), 'currentIndex:', currentScreenIndex);
+    } catch {}
+  }, [screens, currentScreenIndex]);
+
+  const slideAnim = useRef(new Animated.Value(-currentScreenIndex * SCREEN_WIDTH)).current;
   const gestureX = useRef(new Animated.Value(0)).current;
   const shimmerAnim = useRef(new Animated.Value(0)).current;
   const shimmerLoop = useRef<Animated.CompositeAnimation | null>(null);
@@ -62,102 +81,47 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ initialTileContent, init
     shimmerLoop.current?.stop();
   };
 
-  // Handle question click with position capture
+  // Handle question click with position capture (now uses PagerStore)
   const handleQuestionClick = useCallback((question: string, event?: GestureResponderEvent, overrideFromWorld?: Point) => {
     let fromWorld: Point = { x: SCREEN_WIDTH / 2, y: 200 }; // fallback
-    const currentIndex = navigationState.currentScreenIndex;
+    
     if (overrideFromWorld) {
       fromWorld = overrideFromWorld;
     } else if (event) {
       // Convert touch (window coords) to container/world coords (add current page offset)
       fromWorld = {
-        x: event.nativeEvent.pageX + currentIndex * SCREEN_WIDTH,
+        x: event.nativeEvent.pageX + currentScreenIndex * SCREEN_WIDTH,
         y: event.nativeEvent.pageY,
       };
     }
 
-    // Create new result screen
-    const newScreenId = `result-${Date.now()}`;
-    const targetIndex = navigationState.screens.length; // new screen index (starts at 0 since no Page 0)
-    const toWorld: Point = {
-      x: targetIndex * SCREEN_WIDTH + 20, // will be corrected after measuring
-      y: 80,
-    };
-
-    const newScreen: ScreenData = {
-      id: newScreenId,
-      type: 'question-result',
-      question,
-      sourcePosition: fromWorld,
-      targetPosition: toWorld,
-      connectionId: `connection-${newScreenId}`,
-    };
-
-    // Create connection line - temporarily disabled
-    // const newConnection: ConnectionLine = {
-    //   id: `connection-${newScreenId}`,
-    //   from: fromWorld,
-    //   to: toWorld,
-    //   question,
-    //   progress: 0,
-    //   isActive: true,
-    //   fromScreenIndex: -1, // -1 represents MockFeed (Page 0)
-    //   toScreenIndex: targetIndex,
-    // };
-
-    // Update navigation state
-    setNavigationState(prev => ({
-      ...prev,
-      screens: [...prev.screens, newScreen],
-      activeConnections: [], // No connections for now
-      isTransitioning: true,
-    }));
+    // Add result via SessionStore
+    addQuestionToCurrentSession(question, fromWorld);
 
     // Start generating animation
     startShimmerAnimation();
 
     // Animate to new screen
+    const targetIndex = screens.length; // This will be updated by the store
     Animated.timing(slideAnim, {
       toValue: -targetIndex * SCREEN_WIDTH,
       duration: 600,
       useNativeDriver: true,
     }).start(() => {
-      setNavigationState(prev => ({
-        ...prev,
-        currentScreenIndex: targetIndex,
-        isTransitioning: false,
-      }));
+      setIsTransitioning(false);
 
       // Stop shimmer after 3 seconds (simulate generation)
       setTimeout(() => {
         stopShimmerAnimation();
       }, 3000);
     });
-  }, [navigationState.screens.length, navigationState.currentScreenIndex, slideAnim, shimmerAnim]);
+  }, [screens.length, currentScreenIndex, slideAnim, shimmerAnim, addQuestionToCurrentSession]);
 
-  // On mount: if we received an initial question intent (from MockFeed), open immediately
-  React.useEffect(() => {
-    // Start overlay off-screen to the right so the first page slides in
-    overlaySlide.setValue(SCREEN_WIDTH);
-    if (initialQuestionIntent) {
-      const fromWorld: Point = {
-        x: initialQuestionIntent.fromPageX, // MockFeed coordinates
-        y: initialQuestionIntent.fromPageY,
-      };
-      handleQuestionClick(initialQuestionIntent.question, undefined, fromWorld);
-    }
-    // Animate overlay entrance once
-    Animated.timing(overlaySlide, {
-      toValue: 0,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // On mount: no-op; we seed initial screens above
 
   // Handle page swipe navigation
   const handlePageSwipe = (targetIndex: number) => {
-    setNavigationState(prev => ({ ...prev, currentScreenIndex: targetIndex }));
+    setCurrentScreenIndex(targetIndex);
     
     Animated.timing(slideAnim, {
       toValue: -targetIndex * SCREEN_WIDTH,
@@ -177,59 +141,83 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ initialTileContent, init
       const { translationX, velocityX } = event.nativeEvent;
       const threshold = SCREEN_WIDTH * 0.25;
       
-      let targetIndex = navigationState.currentScreenIndex;
+      let targetIndex = currentScreenIndex;
       
       if (translationX > threshold || velocityX > 500) {
-        // Swipe right - go to previous screen (or back to MockFeed if on first result page)
-        if (navigationState.currentScreenIndex === 0) {
-          // Back to MockFeed - close the navigator
-          onClose?.();
-          return;
-        } else {
-          targetIndex = Math.max(0, navigationState.currentScreenIndex - 1);
-        }
+        // Swipe right - go to previous screen (can't go left from MockFeed)
+        targetIndex = Math.max(0, currentScreenIndex - 1);
       } else if (translationX < -threshold || velocityX < -500) {
         // Swipe left - go to next screen
-        targetIndex = Math.min(navigationState.screens.length - 1, navigationState.currentScreenIndex + 1);
+        targetIndex = Math.min(totalPages() - 1, currentScreenIndex + 1);
       }
       
       // Reset gesture value
       gestureX.setValue(0);
       
       // Animate to target screen
-      if (targetIndex !== navigationState.currentScreenIndex) {
+      if (targetIndex !== currentScreenIndex) {
         handlePageSwipe(targetIndex);
       } else {
         // Spring back to current screen
         Animated.spring(slideAnim, {
-          toValue: -navigationState.currentScreenIndex * SCREEN_WIDTH,
+          toValue: -currentScreenIndex * SCREEN_WIDTH,
           useNativeDriver: true,
         }).start();
       }
     }
   };
 
-  // Render individual screen
-  const renderScreen = (screen: ScreenData, index: number) => {
-    // Compute parallax based on horizontal pager progress relative to this index
-    const localOffset = Animated.add(Animated.add(overlaySlide, slideAnim), gestureX);
+  // Render individual page (MockFeed at index 0, then Q&A results)
+  const renderPage = (pageIndex: number) => {
+    // Page 0 is MockFeed
+    if (pageIndex === 0) {
+      return (
+        <View key="mockfeed-page" style={styles.page}>
+          <Animated.View style={[styles.pageInner, { transform: [{ translateX: getParallaxTranslate(pageIndex) }] }]}>
+            <MockFeedContent 
+              onOpenAlgorithmSettings={onOpenAlgorithmSettings}
+              onQuestionClick={onQuestionClick || handleQuestionClick}
+              onScroll={onScroll}
+            />
+          </Animated.View>
+        </View>
+      );
+    }
+
+    // Pages 1+ are Q&A results
+    const resultIndex = pageIndex - 1; // Convert page index to screens array index
+    const screen = screens[resultIndex];
+    if (!screen) return null;
+
+    return renderQAResultPage(screen, pageIndex);
+  };
+
+  // Get parallax transform for a page
+  const getParallaxTranslate = (pageIndex: number) => {
+    const localOffset = Animated.add(slideAnim, gestureX);
     const progress = Animated.divide(Animated.multiply(localOffset, -1), SCREEN_WIDTH);
-    const delta = Animated.add(progress, -index);
-    const parallaxTranslate = (delta as any).interpolate({
+    const delta = Animated.add(progress, -pageIndex);
+    return (delta as any).interpolate({
       inputRange: [-1, 0, 1],
       outputRange: [PARALLAX, 0, -PARALLAX],
       extrapolate: 'clamp',
     });
+  };
+
+  // Render Q&A result page
+  const renderQAResultPage = (screen: ScreenData, pageIndex: number) => {
     return (
       <View key={screen.id} style={styles.page}>
-        <Animated.View style={{ transform: [{ translateX: parallaxTranslate }] }}>
+        <Animated.View style={[styles.pageInner, { transform: [{ translateX: getParallaxTranslate(pageIndex) }] }]}>
           <ScrollView 
             style={styles.pageScrollView}
             contentContainerStyle={styles.pageScrollContent}
             showsVerticalScrollIndicator={false}
           >
-          {/* Only question result pages - no tiles page */}
+          {/* Question result page content */}
           <>
+              {/* DEBUG: big black box to verify layout */}
+              <View style={styles.debugBlackBox} />
               {/* Search Bar Header with spinning logo */}
               <View style={styles.resultHeader}>
                 <View
@@ -240,24 +228,13 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ initialTileContent, init
                       requestAnimationFrame(() => {
                         try {
                           // @ts-ignore measureInWindow exists on native components
-                          node.measureInWindow((x: number, y: number, w: number, h: number) => {
+                          node.measureInWindow((x: number, y: number, _w: number, h: number) => {
                             const toWorld: Point = {
-                              x: index * SCREEN_WIDTH + x + 20, // near left edge of search bar
+                              x: pageIndex * SCREEN_WIDTH + x + 20, // near left edge of search bar
                               y: y + h / 2, // vertically centered
                             };
-                            setNavigationState(prev => ({
-                              ...prev,
-                              activeConnections: prev.activeConnections.map(c =>
-                                c.id === screen.connectionId
-                                  ? { ...c, to: toWorld }
-                                  : c
-                              ),
-                              screens: prev.screens.map(s =>
-                                s.id === screen.id
-                                  ? { ...s, targetPosition: toWorld }
-                                  : s
-                              ),
-                            }));
+                            // TODO: Update target position in PagerStore if needed
+                            // For now, we'll skip this since connections are disabled
                           });
                         } catch {}
                       });
@@ -267,7 +244,7 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ initialTileContent, init
                 >
                   <TextInput
                     style={styles.resultSearchInput}
-                    value={screen.question}
+                    value={screen.question || ''}
                     editable={false}
                   />
                   <Animated.View 
@@ -320,30 +297,44 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ initialTileContent, init
 
   // Render page dots
   const renderPageDots = () => {
-    if (navigationState.screens.length <= 1) return null;
+    const total = totalPages();
+    // Show dots only when there are Q&A pages (MockFeed alone doesn't need dots)
+    if (total <= 1) return null;
 
     return (
       <View style={styles.pageDotsContainer}>
         <View style={styles.pageDots}>
-          {navigationState.screens.map((screen, index) => (
+          {Array.from({ length: total }).map((_, pageIndex) => (
             <TouchableOpacity
-              key={screen.id}
+              key={pageIndex}
               style={[
                 styles.dot,
-                navigationState.currentScreenIndex === index && styles.activeDot,
-                screen.type === 'question-result' && styles.questionDot,
+                currentScreenIndex === pageIndex && styles.activeDot,
+                pageIndex === 0 ? styles.homeDot : styles.questionDot,
               ]}
-              onPress={() => handlePageSwipe(index)}
+              onPress={() => {
+                console.log(`🏠 Navigating to page ${pageIndex}${pageIndex === 0 ? ' (MockFeed Home)' : ''}`);
+                handlePageSwipe(pageIndex);
+              }}
               activeOpacity={0.6}
-            />
+            >
+              {pageIndex === 0 && (
+                <Ionicons 
+                  name="home" 
+                  size={10} 
+                  color={currentScreenIndex === 0 ? "#3b82f6" : "#6b7280"} 
+                />
+              )}
+            </TouchableOpacity>
           ))}
         </View>
       </View>
     );
   };
 
-  const containerWidth = navigationState.screens.length * SCREEN_WIDTH;
-  const screenOffset = Animated.add(Animated.add(overlaySlide, slideAnim), gestureX);
+  const pageCount = totalPages();
+  const containerWidth = pageCount * SCREEN_WIDTH;
+  const screenOffset = Animated.add(slideAnim, gestureX);
 
   return (
     <LinearGradient
@@ -359,10 +350,20 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ initialTileContent, init
       end={{ x: 1, y: 1 }}
       style={styles.container}
     >
+      {/* Close button removed - unified pager system always active */}
+
+      {/* Debug status overlay */}
+      <View style={{ position: 'absolute', top: 8, left: 8, zIndex: 9999, backgroundColor: 'rgba(4,219,235,0.08)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+        <Text style={{ fontSize: 10, color: '#0f172a' }}>total: {totalPages()} idx: {currentScreenIndex} {isOnMockFeed() ? '(MockFeed)' : '(Q&A)'}</Text>
+      </View>
+
       <PanGestureHandler
         onGestureEvent={onGestureEvent}
         onHandlerStateChange={onHandlerStateChange}
-        enabled={!navigationState.isTransitioning}
+        enabled={!isTransitioning}
+        // Favor horizontal intent; fail early on vertical moves
+        activeOffsetX={[-15, 15]}
+        failOffsetY={[-15, 15]}
       >
         <Animated.View 
           style={[
@@ -373,13 +374,13 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ initialTileContent, init
             }
           ]}
         >
-          {navigationState.screens.map(renderScreen)}
+          {Array.from({ length: pageCount }).map((_, pageIndex) => renderPage(pageIndex))}
         </Animated.View>
       </PanGestureHandler>
 
       {/* Connection Lines Overlay - Temporarily disabled */}
       {/* <ConnectionLineRenderer
-        connections={navigationState.activeConnections}
+        connections={[]} // No connections for now
         screenOffset={screenOffset}
         containerWidth={containerWidth}
       /> */}
@@ -402,6 +403,9 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     flex: 1,
   },
+  pageInner: {
+    flex: 1,
+  },
   pageScrollView: {
     flex: 1,
   },
@@ -409,6 +413,12 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 16,
     paddingBottom: 100,
+  },
+  debugBlackBox: {
+    height: 160,
+    backgroundColor: 'black',
+    borderRadius: 8,
+    marginBottom: 16,
   },
   tilesListContent: {
     paddingBottom: 120,
@@ -508,6 +518,33 @@ const styles = StyleSheet.create({
   },
   questionDot: {
     backgroundColor: 'rgba(4, 219, 235, 0.2)',
+  },
+  homeDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(107, 114, 128, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10000,
+  },
+  closeButtonText: {
+    fontSize: 20,
+    color: '#6b7280',
+    fontWeight: 'bold',
   },
 });
 
