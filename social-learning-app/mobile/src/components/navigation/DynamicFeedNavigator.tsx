@@ -62,13 +62,13 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
     const prev = prevScreensLenRef.current;
     if (screens.length > prev) {
       const newIndex = screens.length; // page 0 is feed; results are 1..N
-      setCurrentScreenIndex(newIndex);
+      setIsTransitioning(true);
       requestAnimationFrame(() => {
         scrollRef.current?.scrollTo({ x: newIndex * SCREEN_WIDTH, animated: true });
       });
     }
     prevScreensLenRef.current = screens.length;
-  }, [screens.length, setCurrentScreenIndex]);
+  }, [screens.length]);
 
   // If index changes elsewhere (e.g., restored state), sync the pager position
   React.useEffect(() => {
@@ -394,7 +394,6 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
         showsHorizontalScrollIndicator={false}
         scrollEventThrottle={16}
         style={styles.pager}
-        contentOffset={{ x: currentScreenIndex * SCREEN_WIDTH, y: 0 }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { x: scrollX } } }],
           { useNativeDriver: true }
