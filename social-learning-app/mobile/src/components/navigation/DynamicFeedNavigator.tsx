@@ -56,19 +56,31 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
   // Get screens from current session
   const screens = currentSession?.screens || [];
 
-  // Auto-advance to newly appended pages (follow-up flow)
+  // Smooth auto-advance when a new page is appended
   const prevScreensLenRef = useRef(screens.length);
+  const contentWidthRef = useRef(0);
+  const pendingIndexRef = useRef<number | null>(null);
+
+  const tryAutoScroll = useCallback(() => {
+    const targetIndex = pendingIndexRef.current;
+    if (targetIndex == null) return;
+    const neededWidth = (targetIndex + 1) * SCREEN_WIDTH; // total content width needed
+    if (contentWidthRef.current >= neededWidth - 1) {
+      setIsTransitioning(true);
+      scrollRef.current?.scrollTo({ x: targetIndex * SCREEN_WIDTH, animated: true });
+      pendingIndexRef.current = null;
+    }
+  }, []);
+
   React.useEffect(() => {
     const prev = prevScreensLenRef.current;
     if (screens.length > prev) {
-      const newIndex = screens.length; // page 0 is feed; results are 1..N
-      setIsTransitioning(true);
-      requestAnimationFrame(() => {
-        scrollRef.current?.scrollTo({ x: newIndex * SCREEN_WIDTH, animated: true });
-      });
+      // Defer scroll until content size reflects the new page to avoid rubber-banding
+      pendingIndexRef.current = screens.length; // page 0 is feed; results are 1..N
+      requestAnimationFrame(() => setTimeout(tryAutoScroll, 0));
     }
     prevScreensLenRef.current = screens.length;
-  }, [screens.length]);
+  }, [screens.length, tryAutoScroll]);
 
   // If index changes elsewhere (e.g., restored state), sync the pager position
   React.useEffect(() => {
@@ -398,13 +410,18 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
           [{ nativeEvent: { contentOffset: { x: scrollX } } }],
           { useNativeDriver: true }
         )}
+        onContentSizeChange={(w) => {
+          contentWidthRef.current = w;
+          // Each time width grows, try to complete any pending auto-scroll
+          tryAutoScroll();
+        }}
         onMomentumScrollEnd={(e) => {
           const x = e.nativeEvent.contentOffset.x || 0;
           const newIndex = Math.round(x / SCREEN_WIDTH);
           setCurrentScreenIndex(newIndex);
           setIsTransitioning(false);
         }}
-      >
+        >
         {Array.from({ length: pageCount }).map((_, pageIndex) => renderPage(pageIndex))}
       </Animated.ScrollView>
 
