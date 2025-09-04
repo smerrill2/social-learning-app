@@ -11,9 +11,11 @@ import {
   Dimensions,
   TouchableOpacity,
   Image,
+  Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 import { SimpleTile } from './SimpleTile';
 import { useSessionStore } from '../stores/sessionStore';
 import { ResearchDashboard } from './ResearchDashboard';
@@ -35,6 +37,9 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
   
   const scrollY = useRef(new Animated.Value(0)).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
+  // Slow drifting glow around the hero search bar
+  const glowX = useRef(new Animated.Value(0)).current;
+  const glowY = useRef(new Animated.Value(0)).current;
   // Fade-in animation for tiles after refresh completes
   const NUM_TILES = 10;
   const fadeInAnims = useRef(Array.from({ length: NUM_TILES }, () => new Animated.Value(1))).current;
@@ -128,6 +133,34 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
       bounceAnim.stopAnimation();
     };
   }, []);
+
+  // Start/stop slow drifting glow when hero overlay is visible
+  useEffect(() => {
+    let loopX: Animated.CompositeAnimation | null = null;
+    let loopY: Animated.CompositeAnimation | null = null;
+    const start = () => {
+      loopX = Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowX, { toValue: 1, duration: 6000, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+          Animated.timing(glowX, { toValue: -1, duration: 6000, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        ])
+      );
+      loopY = Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowY, { toValue: -1, duration: 7000, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+          Animated.timing(glowY, { toValue: 1, duration: 7000, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        ])
+      );
+      loopX.start();
+      loopY.start();
+    };
+    const stop = () => {
+      loopX?.stop();
+      loopY?.stop();
+    };
+    if (!heroLocked && !refreshing) start(); else stop();
+    return stop;
+  }, [heroLocked, refreshing, glowX, glowY]);
 
   // Trigger staggered fade-in when a refresh completes
   const prevRefreshing = useRef(false);
@@ -259,19 +292,6 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
             { opacity: heroOpacity, transform: [{ translateY: heroTranslateY }] },
           ]}
         >
-          {/* Brand backdrop gradient behind the intro (teal → transparent) */}
-          <LinearGradient
-            colors={[
-              'rgba(4, 219, 235, 0.22)',
-              'rgba(4, 219, 235, 0.12)',
-              'rgba(4, 219, 235, 0.06)',
-              'rgba(4, 219, 235, 0.0)'
-            ]}
-            locations={[0, 0.25, 0.55, 1]}
-            start={{ x: 0.5, y: 0.0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-          />
           <View style={styles.searchHeaderSection}>
           <Animated.Text 
             style={[
@@ -295,9 +315,10 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
           >
             Scroll to Generate
           </Animated.Text>
+          {/* Wrapper that moves with the search bar; contains a local glow gradient */}
           <Animated.View 
             style={[
-              styles.searchBar,
+              styles.searchBarWrapper,
               {
                 transform: [
                   { translateY: scrollY.interpolate({ inputRange: [0, 300], outputRange: [0, -300], extrapolate: 'clamp' }) },
@@ -306,17 +327,40 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
               }
             ]}
           >
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Ask Anything."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholderTextColor="#6b7280"
-              onSubmitEditing={handleSearch}
+            {/* Localized glow behind the search bar only, slowly drifting */}
+            <AnimatedLinearGradient
+              pointerEvents="none"
+              colors={[
+                'rgba(4, 219, 235, 0.00)',
+                'rgba(4, 219, 235, 0.18)',
+                'rgba(4, 219, 235, 0.00)'
+              ]}
+              locations={[0.1, 0.5, 0.9]}
+              start={{ x: 0.5, y: 0.0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={[
+                styles.searchBarGlow,
+                {
+                  transform: [
+                    { translateX: glowX.interpolate({ inputRange: [-1, 1], outputRange: [-14, 14] }) },
+                    { translateY: glowY.interpolate({ inputRange: [-1, 1], outputRange: [-10, 10] }) },
+                  ],
+                },
+              ]}
             />
-            <TouchableOpacity onPress={handleSearch} style={styles.searchButton}>
-              <Image source={require('../../assets/Betterment.png')} style={styles.searchIcon} resizeMode="contain" />
-            </TouchableOpacity>
+            <View style={styles.searchBar}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Ask Anything."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholderTextColor="#6b7280"
+                onSubmitEditing={handleSearch}
+              />
+              <TouchableOpacity onPress={handleSearch} style={styles.searchButton}>
+                <Image source={require('../../assets/Betterment.png')} style={styles.searchIcon} resizeMode="contain" />
+              </TouchableOpacity>
+            </View>
           </Animated.View>
 
           {/* Scroll indicator */}
@@ -563,6 +607,23 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Wrapper to host the search bar and its animated glow
+  searchBarWrapper: {
+    position: 'relative',
+    width: '100%',
+    maxWidth: 350,
+    alignItems: 'stretch',
+    justifyContent: 'center',
+  },
+  // Localized gradient glow that drifts around the search bar
+  searchBarGlow: {
+    position: 'absolute',
+    top: -28,
+    left: -28,
+    right: -28,
+    bottom: -28,
+    borderRadius: 32,
   },
   fixedHeader: {
     position: 'absolute',
