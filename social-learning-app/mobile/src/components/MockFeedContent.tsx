@@ -210,7 +210,7 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
             }],
           }
         ]}
-        pointerEvents={'auto'}
+        pointerEvents={heroLocked ? 'auto' : 'none'}
       >
         {/* Search Bar */}
         <View style={styles.fixedSearchBar}>
