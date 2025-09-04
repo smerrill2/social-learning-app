@@ -29,10 +29,9 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
   const [loading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isScrolled, setIsScrolled] = useState(false);
   const [heroLocked, setHeroLocked] = useState(false);
   const [hasEngagedWithContent, setHasEngagedWithContent] = useState(false);
-  const [isPullingRefresh, setIsPullingRefresh] = useState(false);
+  const heroLockedRef = useRef(false);
   
   const scrollY = useRef(new Animated.Value(0)).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
@@ -145,11 +144,14 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
     prevRefreshing.current = refreshing;
   }, [refreshing]);
 
-  // Keep tiles visible when hero locks by removing hero gap
+  // Maintain visual position when hero locks by compensating removed top padding
   useEffect(() => {
     if (heroLocked) {
       requestAnimationFrame(() => {
-        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+        const currentY = (scrollY as any)?._value ?? 0;
+        // When we remove the hero gap (top padding), shift scroll up by that amount
+        const targetY = Math.max(0, currentY - TILES_START_POSITION);
+        scrollViewRef.current?.scrollTo({ y: targetY, animated: false });
       });
     }
   }, [heroLocked]);
@@ -181,20 +183,19 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
     console.log('🔍 Search query:', searchQuery);
   };
 
-  const handleScroll = (event: any) => {
-    let offsetY = event.nativeEvent.contentOffset.y;
-    
-    if (!heroLocked && offsetY > CONTENT_ENGAGEMENT_THRESHOLD) {
-      console.log('🎯 HERO LOCK TRIGGERED! User has engaged with content');
-      setHeroLocked(true);
-      setHasEngagedWithContent(true);
-    }
-    
-    setIsPullingRefresh(offsetY < 0);
-    scrollY.setValue(offsetY);
-    setIsScrolled(offsetY > 10);
-    onScroll?.();
-  };
+  // Smooth hero lock detection without per-frame React state churn
+  useEffect(() => {
+    const sub = scrollY.addListener(({ value }) => {
+      if (!heroLockedRef.current && value > CONTENT_ENGAGEMENT_THRESHOLD) {
+        heroLockedRef.current = true;
+        setHeroLocked(true);
+        setHasEngagedWithContent(true);
+      }
+    });
+    return () => {
+      scrollY.removeListener(sub);
+    };
+  }, [scrollY]);
 
   return (
     <>
@@ -209,7 +210,7 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
             }],
           }
         ]}
-        pointerEvents={heroLocked || isScrolled ? 'auto' : 'none'}
+        pointerEvents={'auto'}
       >
         {/* Search Bar */}
         <View style={styles.fixedSearchBar}>
@@ -250,7 +251,7 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
       </Animated.View>
 
       {/* Hero Overlay - Hidden when hero is locked or refreshing */}
-      {(!heroLocked && !refreshing && !isPullingRefresh) && (
+      {(!heroLocked && !refreshing) && (
         <Animated.View
           pointerEvents="none"
           style={[
@@ -332,27 +333,19 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
         style={styles.scrollContainer}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: (!heroLocked && !refreshing && !isPullingRefresh) ? TILES_START_POSITION : 0 }
+          { paddingTop: (!heroLocked && !refreshing) ? TILES_START_POSITION : 0 }
         ]}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { 
-            useNativeDriver: true,
-            listener: handleScroll
-          }
+          { useNativeDriver: true }
         )}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         alwaysBounceVertical={true}
         bounces={true}
+        removeClippedSubviews={true}
         contentInsetAdjustmentBehavior="never"
-        onScrollBeginDrag={() => {
-          console.log('👆 Scroll drag started');
-        }}
-        onScrollEndDrag={(event) => {
-          const offsetY = event.nativeEvent.contentOffset.y;
-          console.log('👇 Scroll drag ended at:', offsetY);
-        }}
+        // Trim noisy logs to reduce JS load during scroll
         refreshControl={
           <RefreshControl 
             refreshing={refreshing} 
@@ -367,8 +360,8 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
           {/* Tiles container with appearance animation */}
           <Animated.View 
             style={{
-              transform: [{ translateY: (heroLocked || refreshing || isPullingRefresh) ? 0 : tilesTranslateY }],
-              opacity: (heroLocked || refreshing || isPullingRefresh) ? 1 : tilesAppearOpacity,
+              transform: [{ translateY: (heroLocked || refreshing) ? 0 : tilesTranslateY }],
+              opacity: (heroLocked || refreshing) ? 1 : tilesAppearOpacity,
               paddingBottom: 100,
             }}
           >
@@ -398,7 +391,7 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
                 <Animated.View 
                   key={`feed-tile-${i}`}
                   style={{ 
-                    opacity: (heroLocked || refreshing || isPullingRefresh)
+                    opacity: (heroLocked || refreshing)
                       ? fadeInAnims[i]
                       : Animated.multiply(
                           Animated.multiply(tilesAppearOpacity, tileOpacity),
@@ -514,11 +507,12 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     paddingHorizontal: 20,
     paddingVertical: 8,
-    shadowColor: 'rgb(4, 219, 235)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 90,
-    elevation: 12,
+    // Trim heavy shadows to avoid GPU overdraw during scroll
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 4,
     width: '100%',
     maxWidth: 350,
   },
