@@ -56,6 +56,27 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
   // Get screens from current session
   const screens = currentSession?.screens || [];
 
+  // Auto-advance to newly appended pages (follow-up flow)
+  const prevScreensLenRef = useRef(screens.length);
+  React.useEffect(() => {
+    const prev = prevScreensLenRef.current;
+    if (screens.length > prev) {
+      const newIndex = screens.length; // page 0 is feed; results are 1..N
+      setCurrentScreenIndex(newIndex);
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ x: newIndex * SCREEN_WIDTH, animated: true });
+      });
+    }
+    prevScreensLenRef.current = screens.length;
+  }, [screens.length, setCurrentScreenIndex]);
+
+  // If index changes elsewhere (e.g., restored state), sync the pager position
+  React.useEffect(() => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ x: currentScreenIndex * SCREEN_WIDTH, animated: true });
+    });
+  }, [currentScreenIndex]);
+
   // Current index tracked via ScrollView momentum; no manual sync needed
 
   // Debug: log state changes
