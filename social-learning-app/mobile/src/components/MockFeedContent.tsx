@@ -342,8 +342,9 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
                 styles.searchBarGlow,
                 {
                   transform: [
-                    { translateX: glowX.interpolate({ inputRange: [-1, 1], outputRange: [-14, 14] }) },
-                    { translateY: glowY.interpolate({ inputRange: [-1, 1], outputRange: [-10, 10] }) },
+                    // Favor vertical drift; keep horizontal subtle
+                    { translateX: glowX.interpolate({ inputRange: [-1, 1], outputRange: [-4, 4] }) },
+                    { translateY: glowY.interpolate({ inputRange: [-1, 1], outputRange: [-22, 22] }) },
                   ],
                 },
               ]}
