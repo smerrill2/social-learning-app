@@ -332,24 +332,26 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
               pointerEvents="none"
               colors={[
                 'rgba(4, 219, 235, 0.00)',
-                'rgba(4, 219, 235, 0.18)',
+                'rgba(4, 219, 235, 0.15)',
+                'rgba(4, 219, 235, 0.45)',
+                'rgba(4, 219, 235, 0.45)',
+                'rgba(4, 219, 235, 0.15)',
                 'rgba(4, 219, 235, 0.00)'
               ]}
-              locations={[0.1, 0.5, 0.9]}
-              start={{ x: 0.5, y: 0.0 }}
-              end={{ x: 0.5, y: 1 }}
+              locations={[0.0, 0.25, 0.4, 0.6, 0.75, 1.0]}
+              start={{ x: 0.5, y: 0.0}}
+              end={{ x: 0.5, y: 1.0 }}
               style={[
                 styles.searchBarGlow,
                 {
                   transform: [
-                    // Favor vertical drift; keep horizontal subtle
-                    { translateX: glowX.interpolate({ inputRange: [-1, 1], outputRange: [-4, 4] }) },
-                    { translateY: glowY.interpolate({ inputRange: [-1, 1], outputRange: [-22, 22] }) },
+                    { translateX: glowX.interpolate({ inputRange: [-1, 1], outputRange: [-14, 14] }) },
+                    { translateY: glowY.interpolate({ inputRange: [-3, 3], outputRange: [-30, 30] }) },
                   ],
                 },
               ]}
-            />
-            <View style={styles.searchBar}>
+                          />
+              <View style={styles.searchBar}>
               <TextInput
                 style={styles.searchInput}
                 placeholder="Ask Anything."
@@ -620,11 +622,11 @@ const styles = StyleSheet.create({
   // Localized gradient glow that drifts around the search bar
   searchBarGlow: {
     position: 'absolute',
-    top: -28,
-    left: -28,
-    right: -28,
-    bottom: -28,
-    borderRadius: 32,
+    top: -60,
+    left: -100,
+    right: -20,
+    bottom: -76,
+    borderRadius: 10,
   },
   fixedHeader: {
     position: 'absolute',
