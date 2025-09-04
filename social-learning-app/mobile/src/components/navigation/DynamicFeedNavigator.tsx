@@ -83,11 +83,20 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
   }, [screens.length, tryAutoScroll]);
 
   // If index changes elsewhere (e.g., restored state), sync the pager position
+  // Guard against rubber-banding by scrolling only when content width can accommodate the target index.
   React.useEffect(() => {
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ x: currentScreenIndex * SCREEN_WIDTH, animated: true });
-    });
-  }, [currentScreenIndex]);
+    const targetIndex = currentScreenIndex;
+    const maxIndexAvailable = Math.max(0, Math.floor(contentWidthRef.current / SCREEN_WIDTH) - 1);
+    if (targetIndex <= maxIndexAvailable) {
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ x: targetIndex * SCREEN_WIDTH, animated: true });
+      });
+    } else {
+      // Defer until width grows to include the target page
+      pendingIndexRef.current = targetIndex;
+      tryAutoScroll();
+    }
+  }, [currentScreenIndex, tryAutoScroll]);
 
   // Current index tracked via ScrollView momentum; no manual sync needed
 
@@ -143,18 +152,10 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
     // Start generating animation
     startShimmerAnimation();
 
-    // Scroll to the new page after the store appends it
+    // Allow the screens.length effect + onContentSizeChange to drive the auto-scroll
     setIsTransitioning(true);
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        const lastIndex = Math.max(0, totalPages() - 1);
-        setCurrentScreenIndex(lastIndex);
-        scrollRef.current?.scrollTo({ x: lastIndex * SCREEN_WIDTH, animated: true });
-        // Stop shimmer after a moment to simulate generation
-        setTimeout(() => stopShimmerAnimation(), 3000);
-      }, 16);
-    });
-  }, [screens.length, currentScreenIndex, shimmerAnim, addQuestionToCurrentSession, totalPages, setCurrentScreenIndex]);
+    setTimeout(() => stopShimmerAnimation(), 3000);
+  }, [screens.length, currentScreenIndex, shimmerAnim, addQuestionToCurrentSession]);
 
   // On mount: no-op; we seed initial screens above
 
