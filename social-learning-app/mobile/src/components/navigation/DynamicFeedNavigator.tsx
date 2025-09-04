@@ -372,6 +372,8 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
         decelerationRate="fast"
         showsHorizontalScrollIndicator={false}
         scrollEventThrottle={16}
+        style={styles.pager}
+        contentOffset={{ x: currentScreenIndex * SCREEN_WIDTH, y: 0 }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { x: scrollX } } }],
           { useNativeDriver: true }
@@ -382,7 +384,6 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
           setCurrentScreenIndex(newIndex);
           setIsTransitioning(false);
         }}
-        contentContainerStyle={styles.screensContainer}
       >
         {Array.from({ length: pageCount }).map((_, pageIndex) => renderPage(pageIndex))}
       </Animated.ScrollView>
@@ -400,9 +401,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  screensContainer: {
+  pager: {
     flex: 1,
-    flexDirection: 'row',
+  },
+  screensContainer: {
+    // No flex or row here; horizontal ScrollView lays out children side-by-side
   },
   page: {
     width: SCREEN_WIDTH,
