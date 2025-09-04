@@ -259,15 +259,15 @@ export const MockFeedContent: React.FC<Props> = ({ onOpenAlgorithmSettings, onSc
             { opacity: heroOpacity, transform: [{ translateY: heroTranslateY }] },
           ]}
         >
-          {/* Soft backdrop gradient behind the intro */}
+          {/* Brand backdrop gradient behind the intro (teal → transparent) */}
           <LinearGradient
             colors={[
-              'rgba(139, 174, 211, 0.08)',
-              'rgba(185, 208, 235, 0.05)',
-              'rgba(240, 245, 250, 0.02)',
-              'rgba(255, 255, 255, 0)',
+              'rgba(4, 219, 235, 0.22)',
+              'rgba(4, 219, 235, 0.12)',
+              'rgba(4, 219, 235, 0.06)',
+              'rgba(4, 219, 235, 0.0)'
             ]}
-            locations={[0, 0.35, 0.7, 1]}
+            locations={[0, 0.25, 0.55, 1]}
             start={{ x: 0.5, y: 0.0 }}
             end={{ x: 0.5, y: 1 }}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
@@ -520,12 +520,12 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     paddingHorizontal: 20,
     paddingVertical: 8,
-    // Trim heavy shadows to avoid GPU overdraw during scroll
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 4,
+    // Bring back the brand glow softly for the intro
+    shadowColor: 'rgb(4, 219, 235)',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.28,
+    shadowRadius: 44,
+    elevation: 8,
     width: '100%',
     maxWidth: 350,
   },
