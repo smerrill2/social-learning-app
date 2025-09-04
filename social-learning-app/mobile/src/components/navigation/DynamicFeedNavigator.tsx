@@ -157,11 +157,13 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
     const distance = Math.abs(currentValue - targetValue);
     const progress = distance / SCREEN_WIDTH;
     
-    Animated.timing(slideAnim, {
+    // Critically-damped spring for programmatic snaps
+    Animated.spring(slideAnim, {
       toValue: targetValue,
-      // Slightly snappier ease-out for manual page taps
-      duration: 260 + (progress * 140),
-      easing: Easing.bezier(0.22, 1, 0.36, 1),
+      stiffness: 380,
+      damping: 45,
+      mass: 1,
+      overshootClamping: true,
       useNativeDriver: true,
     }).start(() => {
       setIsTransitioning(false);
@@ -232,19 +234,20 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
         setCurrentScreenIndex(targetIndex);
         setIsTransitioning(true);
         
-        // iPhone-style animation: fast start, smooth deceleration
-        const distance = Math.abs(currentAnimatedValue - targetValue);
-        const progress = distance / SCREEN_WIDTH;
-        
-        Animated.timing(slideAnim, {
+        // Smooth spring with continuity from finger velocity
+        const initialVelocity = Math.max(-4, Math.min(4, velocityX / 2000));
+        Animated.spring(slideAnim, {
           toValue: targetValue,
-          // Slightly snappier, iOS-like ease-out based on distance
-          duration: 260 + (progress * 140),
-          easing: Easing.bezier(0.22, 1, 0.36, 1),
+          velocity: initialVelocity,
+          stiffness: 380,
+          damping: 45,
+          mass: 1,
+          overshootClamping: true,
           useNativeDriver: true,
+          restDisplacementThreshold: 0.2,
+          restSpeedThreshold: 0.2,
         }).start(() => {
           setIsTransitioning(false);
-          // Light haptic on page snap if available
           if (Haptics?.selectionAsync) {
             try { Haptics.selectionAsync(); } catch {}
           }
@@ -253,8 +256,10 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
         // iPhone-style spring back: bouncy but controlled
         Animated.spring(slideAnim, {
           toValue: targetValue,
-          tension: 140,
-          friction: 10,
+          stiffness: 300,
+          damping: 36,
+          mass: 1,
+          overshootClamping: true,
           useNativeDriver: true,
         }).start();
       }
