@@ -13,7 +13,7 @@ import {
   Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { PanGestureHandler, State } from 'react-native-gesture-handler';
+// import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 // Optional haptics on page snap (gracefully degrades if unavailable)
 let Haptics: any = null;
@@ -56,10 +56,7 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
   // Get screens from current session
   const screens = currentSession?.screens || [];
 
-  // Sync slide animation with SessionStore currentScreenIndex
-  React.useEffect(() => {
-    slideAnim.setValue(-currentScreenIndex * SCREEN_WIDTH);
-  }, [currentScreenIndex, slideAnim]);
+  // Current index tracked via ScrollView momentum; no manual sync needed
 
   // Debug: log state changes
   React.useEffect(() => {
@@ -68,8 +65,10 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
     } catch {}
   }, [screens, currentScreenIndex]);
 
-  const slideAnim = useRef(new Animated.Value(-currentScreenIndex * SCREEN_WIDTH)).current;
-  const gestureX = useRef(new Animated.Value(0)).current;
+  // Legacy values removed in favor of native scrolling
+  // Native horizontal scroll position for iOS-like paging physics
+  const scrollX = useRef(new Animated.Value(currentScreenIndex * SCREEN_WIDTH)).current;
+  const scrollRef = useRef<any>(null);
   const shimmerAnim = useRef(new Animated.Value(0)).current;
   const shimmerLoop = useRef<Animated.CompositeAnimation | null>(null);
 
@@ -111,160 +110,32 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
     // Start generating animation
     startShimmerAnimation();
 
-    // Animate to new screen with smooth easing from current position
-    const targetIndex = screens.length; // This will be updated by the store
-    const currentValue = slideAnim._value + gestureX._value;
-    const targetValue = -targetIndex * SCREEN_WIDTH;
-    
+    // Scroll to the new page after the store appends it
     setIsTransitioning(true);
-    
-    // Set to current position and animate to target
-    slideAnim.setValue(currentValue);
-    gestureX.setValue(0);
-    
-    const distance = Math.abs(currentValue - targetValue);
-    const progress = distance / SCREEN_WIDTH;
-    
-    Animated.timing(slideAnim, {
-      toValue: targetValue,
-      duration: 320 + (progress * 180), // 320-500ms
-      easing: Easing.bezier(0.25, 0.1, 0.25, 1), // iOS ease out
-      useNativeDriver: true,
-    }).start(() => {
-      setIsTransitioning(false);
-
-      // Stop shimmer after 3 seconds (simulate generation)
+    requestAnimationFrame(() => {
       setTimeout(() => {
-        stopShimmerAnimation();
-      }, 3000);
+        const lastIndex = Math.max(0, totalPages() - 1);
+        setCurrentScreenIndex(lastIndex);
+        scrollRef.current?.scrollTo({ x: lastIndex * SCREEN_WIDTH, animated: true });
+        // Stop shimmer after a moment to simulate generation
+        setTimeout(() => stopShimmerAnimation(), 3000);
+      }, 16);
     });
-  }, [screens.length, currentScreenIndex, slideAnim, shimmerAnim, addQuestionToCurrentSession]);
+  }, [screens.length, currentScreenIndex, shimmerAnim, addQuestionToCurrentSession, totalPages, setCurrentScreenIndex]);
 
   // On mount: no-op; we seed initial screens above
 
   // Handle page swipe navigation (for programmatic navigation like dots)
   const handlePageSwipe = (targetIndex: number) => {
-    const currentValue = slideAnim._value + gestureX._value;
-    const targetValue = -targetIndex * SCREEN_WIDTH;
-    
-    setCurrentScreenIndex(targetIndex);
     setIsTransitioning(true);
-    
-    // Set to current position and animate to target
-    slideAnim.setValue(currentValue);
-    gestureX.setValue(0);
-    
-    const distance = Math.abs(currentValue - targetValue);
-    const progress = distance / SCREEN_WIDTH;
-    
-    // Critically-damped spring for programmatic snaps
-    Animated.spring(slideAnim, {
-      toValue: targetValue,
-      stiffness: 380,
-      damping: 45,
-      mass: 1,
-      overshootClamping: true,
-      useNativeDriver: true,
-    }).start(() => {
-      setIsTransitioning(false);
-      if (Haptics?.selectionAsync) {
-        try { Haptics.selectionAsync(); } catch {}
-      }
-    });
-  };
-
-  // Gesture handling with better state management
-  const onGestureEvent = Animated.event(
-    [{ nativeEvent: { translationX: gestureX } }],
-    { useNativeDriver: true }
-  );
-
-  // Handle gesture state changes for smoother interactions
-  const onGestureStateChange = (event: any) => {
-    const { state } = event.nativeEvent;
-    
-    if (state === State.BEGAN) {
-      // Stop any ongoing animations when user starts gesture
-      slideAnim.stopAnimation();
-    } else if (state === State.END || state === State.CANCELLED) {
-      onHandlerStateChange(event);
+    setCurrentScreenIndex(targetIndex);
+    scrollRef.current?.scrollTo({ x: targetIndex * SCREEN_WIDTH, animated: true });
+    if (Haptics?.selectionAsync) {
+      try { Haptics.selectionAsync(); } catch {}
     }
   };
 
-  const onHandlerStateChange = (event: any) => {
-    if (event.nativeEvent.state === State.END) {
-      const { translationX, velocityX } = event.nativeEvent;
-      
-      // iPhone-style physics: lower distance threshold, higher velocity sensitivity
-      const distanceThreshold = SCREEN_WIDTH * 0.15; // More sensitive to distance
-      const velocityThreshold = 200; // More sensitive to velocity
-      const strongVelocityThreshold = 800; // Fast flick = immediate commit
-      
-      let targetIndex = currentScreenIndex;
-      
-      // Strong velocity overrides distance (iPhone behavior)
-      if (velocityX > strongVelocityThreshold) {
-        targetIndex = Math.max(0, currentScreenIndex - 1);
-      } else if (velocityX < -strongVelocityThreshold) {
-        targetIndex = Math.min(totalPages() - 1, currentScreenIndex + 1);
-      } else {
-        // Normal threshold check with combined distance + velocity
-        const rightward = translationX > distanceThreshold || (translationX > distanceThreshold * 0.5 && velocityX > velocityThreshold);
-        const leftward = translationX < -distanceThreshold || (translationX < -distanceThreshold * 0.5 && velocityX < -velocityThreshold);
-        
-        if (rightward) {
-          targetIndex = Math.max(0, currentScreenIndex - 1);
-        } else if (leftward) {
-          targetIndex = Math.min(totalPages() - 1, currentScreenIndex + 1);
-        }
-      }
-      
-      // Get current animated position to continue from where user left off
-      const currentAnimatedValue = slideAnim._value + gestureX._value;
-      const targetValue = -targetIndex * SCREEN_WIDTH;
-      
-      // Reset gesture value immediately
-      gestureX.setValue(0);
-      
-      // Set slideAnim to current position and animate smoothly to target
-      slideAnim.setValue(currentAnimatedValue);
-      
-      if (targetIndex !== currentScreenIndex) {
-        // Update store state first
-        setCurrentScreenIndex(targetIndex);
-        setIsTransitioning(true);
-        
-        // Smooth spring with continuity from finger velocity
-        const initialVelocity = Math.max(-4, Math.min(4, velocityX / 2000));
-        Animated.spring(slideAnim, {
-          toValue: targetValue,
-          velocity: initialVelocity,
-          stiffness: 380,
-          damping: 45,
-          mass: 1,
-          overshootClamping: true,
-          useNativeDriver: true,
-          restDisplacementThreshold: 0.2,
-          restSpeedThreshold: 0.2,
-        }).start(() => {
-          setIsTransitioning(false);
-          if (Haptics?.selectionAsync) {
-            try { Haptics.selectionAsync(); } catch {}
-          }
-        });
-      } else {
-        // iPhone-style spring back: bouncy but controlled
-        Animated.spring(slideAnim, {
-          toValue: targetValue,
-          stiffness: 300,
-          damping: 36,
-          mass: 1,
-          overshootClamping: true,
-          useNativeDriver: true,
-        }).start();
-      }
-    }
-  };
+  // Gesture handler removed in favor of native horizontal paging ScrollView
 
   // Render individual page (MockFeed at index 0, then Q&A results)
   const renderPage = (pageIndex: number) => {
@@ -302,9 +173,8 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
 
   // Get parallax transform for a page with smoother interpolation
   const getParallaxTranslate = (pageIndex: number) => {
-    const localOffset = Animated.add(slideAnim, gestureX);
-    const progress = Animated.divide(Animated.multiply(localOffset, -1), SCREEN_WIDTH);
-    const delta = Animated.add(progress, -pageIndex);
+    const progress = Animated.divide(scrollX, SCREEN_WIDTH);
+    const delta = Animated.subtract(progress, pageIndex);
     return (delta as any).interpolate({
       inputRange: [-2, -1, 0, 1, 2],
       outputRange: [PARALLAX * 2, PARALLAX, 0, -PARALLAX, -PARALLAX * 2],
@@ -314,9 +184,8 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
 
   // Get scale transform for smooth page transitions
   const getPageScale = (pageIndex: number) => {
-    const localOffset = Animated.add(slideAnim, gestureX);
-    const progress = Animated.divide(Animated.multiply(localOffset, -1), SCREEN_WIDTH);
-    const delta = Animated.add(progress, -pageIndex);
+    const progress = Animated.divide(scrollX, SCREEN_WIDTH);
+    const delta = Animated.subtract(progress, pageIndex);
     return (delta as any).interpolate({
       inputRange: [-1, 0, 1],
       outputRange: [0.99, 1, 0.99],
@@ -326,9 +195,8 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
 
   // Get opacity for smooth fade transitions
   const getPageOpacity = (pageIndex: number) => {
-    const localOffset = Animated.add(slideAnim, gestureX);
-    const progress = Animated.divide(Animated.multiply(localOffset, -1), SCREEN_WIDTH);
-    const delta = Animated.add(progress, -pageIndex);
+    const progress = Animated.divide(scrollX, SCREEN_WIDTH);
+    const delta = Animated.subtract(progress, pageIndex);
     return (delta as any).interpolate({
       inputRange: [-1, 0, 1],
       outputRange: [0.9, 1, 0.9],
@@ -474,17 +342,6 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
   };
 
   const pageCount = totalPages();
-  const containerWidth = pageCount * SCREEN_WIDTH;
-  const screenOffset = Animated.add(slideAnim, gestureX);
-
-  // Rubber band effect at edges like iOS home screen
-  const maxOffset = 0; // leftmost (page 0)
-  const minOffset = -((pageCount - 1) * SCREEN_WIDTH); // rightmost (last page)
-  const screenOffsetRubber = (screenOffset as any).interpolate({
-    inputRange: [minOffset - SCREEN_WIDTH, minOffset, maxOffset, maxOffset + SCREEN_WIDTH],
-    outputRange: [minOffset - SCREEN_WIDTH * 0.3, minOffset, maxOffset, maxOffset + SCREEN_WIDTH * 0.3],
-    extrapolate: 'clamp',
-  });
 
   return (
     <LinearGradient
@@ -507,35 +364,31 @@ export const DynamicFeedNavigator: React.FC<Props> = ({ onClose, onOpenAlgorithm
         <Text style={{ fontSize: 10, color: '#0f172a' }}>total: {totalPages()} idx: {currentScreenIndex} {isOnMockFeed() ? '(MockFeed)' : '(Q&A)'}</Text>
       </View>
 
-      <PanGestureHandler
-        onGestureEvent={onGestureEvent}
-        onHandlerStateChange={onGestureStateChange}
-        enabled={!isTransitioning}
-        // iPhone-style gesture recognition: quick horizontal activation
-        activeOffsetX={[-8, 8]}
-        failOffsetY={[-25, 25]}
-        minPointers={1}
-        maxPointers={1}
+      <Animated.ScrollView
+        ref={scrollRef}
+        horizontal
+        pagingEnabled
+        bounces
+        decelerationRate="fast"
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: true }
+        )}
+        onMomentumScrollEnd={(e) => {
+          const x = e.nativeEvent.contentOffset.x || 0;
+          const newIndex = Math.round(x / SCREEN_WIDTH);
+          setCurrentScreenIndex(newIndex);
+          setIsTransitioning(false);
+        }}
+        contentContainerStyle={styles.screensContainer}
       >
-        <Animated.View 
-          style={[
-            styles.screensContainer,
-            {
-              width: containerWidth,
-              transform: [{ translateX: screenOffsetRubber }]
-            }
-          ]}
-        >
-          {Array.from({ length: pageCount }).map((_, pageIndex) => renderPage(pageIndex))}
-        </Animated.View>
-      </PanGestureHandler>
+        {Array.from({ length: pageCount }).map((_, pageIndex) => renderPage(pageIndex))}
+      </Animated.ScrollView>
 
       {/* Connection Lines Overlay - Temporarily disabled */}
-      {/* <ConnectionLineRenderer
-        connections={[]} // No connections for now
-        screenOffset={screenOffset}
-        containerWidth={containerWidth}
-      /> */}
+      {/* <ConnectionLineRenderer connections={[]} screenOffset={Animated.multiply(scrollX, -1)} containerWidth={pageCount * SCREEN_WIDTH} /> */}
 
       {/* Page Dots */}
       {renderPageDots()}
